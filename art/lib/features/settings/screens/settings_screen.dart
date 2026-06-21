@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../core/services/preferences_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,12 +15,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _darkModeEnabled = false;
   bool _privateAccountEnabled = false;
+  String _language = 'English';
   String _userEmail = '';
 
   @override
   void initState() {
     super.initState();
     _userEmail = AuthRepository().currentUser?.email ?? 'No email';
+    final prefs = PreferencesService();
+    _notificationsEnabled = prefs.notificationsEnabled;
+    _darkModeEnabled = prefs.darkModeEnabled;
+    _privateAccountEnabled = prefs.privateAccountEnabled;
+    _language = prefs.language;
   }
 
   void _showChangePasswordDialog() {
@@ -285,7 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ]),
 
-            // PREFERENCES SECTION
+             // PREFERENCES SECTION
             _buildSectionHeader('Preferences'),
             _buildCardContainer([
               _buildListTile(
@@ -301,6 +308,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setState(() {
                       _notificationsEnabled = val;
                     });
+                    PreferencesService().setNotificationsEnabled(val);
                   },
                 ),
                 onTap: () {},
@@ -319,6 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setState(() {
                       _darkModeEnabled = val;
                     });
+                    PreferencesService().setDarkModeEnabled(val);
                   },
                 ),
                 onTap: () {},
@@ -327,8 +336,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildListTile(
                 icon: Icons.language_outlined,
                 title: 'Language',
-                trailingText: 'English',
-                onTap: () {},
+                trailingText: _language,
+                onTap: _showLanguageDialog,
               ),
             ]),
 
@@ -348,6 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     setState(() {
                       _privateAccountEnabled = val;
                     });
+                    PreferencesService().setPrivateAccountEnabled(val);
                   },
                 ),
                 onTap: () {},
@@ -385,6 +395,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showLanguageDialog() {
+    final languages = ['English', 'Spanish', 'French', 'Urdu', 'German', 'Chinese'];
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.creamBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Select Language',
+            style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: languages.length,
+              itemBuilder: (context, index) {
+                final lang = languages[index];
+                return ListTile(
+                  title: Text(lang, style: const TextStyle(color: AppColors.black)),
+                  trailing: _language == lang ? const Icon(Icons.check, color: AppColors.coral) : null,
+                  onTap: () {
+                    setState(() {
+                      _language = lang;
+                    });
+                    PreferencesService().setLanguage(lang);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }

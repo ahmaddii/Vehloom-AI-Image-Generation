@@ -176,56 +176,9 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Beautiful Hero Image Display with rounded bottom edges
-                            Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => FullScreenImageViewer(
-                                        imageUrl: _artwork!.imageUrl,
-                                        title: _artwork!.title,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: CachedNetworkImage(
-                                  imageUrl: _artwork!.imageUrl,
-                                  fit: BoxFit.fitWidth,
-                                  placeholder: (context, url) => Container(
-                                    height: 300,
-                                    color: AppColors.creamDark,
-                                    child: const Center(
-                                      child: CircularProgressIndicator(color: AppColors.coral),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    height: 300,
-                                    color: AppColors.creamDark,
-                                    child: const Icon(Icons.broken_image, size: 48, color: AppColors.darkGrey),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 12),
-
                             // Creator details and Likes row (Spaced out beautifully)
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              padding: const EdgeInsets.only(left: 20, right: 20, top: 12, bottom: 8),
                               child: Row(
                                 children: [
                                   GestureDetector(
@@ -320,7 +273,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                             if ((_artwork!.description != null && _artwork!.description!.isNotEmpty) ||
                                 _artwork!.tags.isNotEmpty)
                               Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: AppColors.creamLight,
@@ -367,6 +320,53 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                   ],
                                 ),
                               ),
+
+                            const SizedBox(height: 8),
+
+                            // Beautiful Hero Image Display with rounded bottom edges
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => FullScreenImageViewer(
+                                        imageUrl: _artwork!.imageUrl,
+                                        title: _artwork!.title,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: CachedNetworkImage(
+                                  imageUrl: _artwork!.imageUrl,
+                                  fit: BoxFit.fitWidth,
+                                  placeholder: (context, url) => Container(
+                                    height: 300,
+                                    color: AppColors.creamDark,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(color: AppColors.coral),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    height: 300,
+                                    color: AppColors.creamDark,
+                                    child: const Icon(Icons.broken_image, size: 48, color: AppColors.darkGrey),
+                                  ),
+                                ),
+                              ),
+                            ),
 
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),

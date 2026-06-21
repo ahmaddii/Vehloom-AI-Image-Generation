@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../data/repositories/auth_repository.dart';
 
 class OnboardingScreen1 extends StatefulWidget {
   const OnboardingScreen1({super.key});
@@ -13,6 +14,16 @@ class OnboardingScreen1 extends StatefulWidget {
 class _OnboardingScreen1State extends State<OnboardingScreen1> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (AuthRepository().currentUser != null) {
+        context.go('/');
+      }
+    });
+  }
 
   final List<Map<String, dynamic>> _slides = [
     {

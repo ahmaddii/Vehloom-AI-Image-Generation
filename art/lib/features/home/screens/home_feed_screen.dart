@@ -26,6 +26,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   ];
   int _selectedCategoryIndex = 0;
 
+  ProfileModel? _myProfile;
   List<ProfileModel> _creators = [];
   List<ArtworkModel> _masonryArtworks = [];
   bool _isLoading = true;
@@ -45,23 +46,41 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       final artworks = await ArtworkRepository().fetchLatestArtworks();
       final currentUserId = AuthRepository().currentUser?.id;
       List<ProfileModel> creators = [];
+      ProfileModel? myProfile;
       if (currentUserId != null) {
         // Fetch current user's profile
-        final myProfile = await ProfileRepository().getProfile(currentUserId);
-        if (myProfile != null) {
-          creators.add(myProfile);
+        myProfile = await ProfileRepository().getProfile(currentUserId);
+        
+        // Fallback to Auth metadata if profiles table record is missing/delayed
+        if (myProfile == null) {
+          final email = AuthRepository().currentUser?.email ?? '';
+          final metaUsername = AuthRepository().currentUser?.userMetadata?['username'] as String? ?? email.split('@').first;
+          myProfile = ProfileModel(
+            id: currentUserId,
+            username: metaUsername,
+            displayName: AuthRepository().currentUser?.userMetadata?['display_name'] as String? ?? metaUsername,
+            avatarUrl: '',
+            bio: 'Artist member',
+            createdAt: DateTime.now(),
+          );
         }
+
+        creators.add(myProfile);
+
         // Fetch followed creators
         final followed = await SocialRepository().fetchFollowing(currentUserId);
         creators.addAll(followed);
       }
       if (mounted) {
         setState(() {
+          _myProfile = myProfile;
           _masonryArtworks = artworks;
           _creators = creators;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      print('HomeFeedScreen _loadData error: $e');
+    }
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -130,22 +149,35 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Top Bar
+              // Top Bar: Discover AI Art (left) & Actions (right)
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+                padding: const EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  top: 12,
+                  bottom: 8,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.menu,
-                        color: AppColors.black,
-                        size: 28,
+                    const Text.rich(
+                      TextSpan(
+                        text: 'Discover ',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.black,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: 'AI Art',
+                            style: TextStyle(
+                              color: AppColors.coral,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                      onPressed: () {},
                     ),
                     Row(
                       children: [
@@ -202,32 +234,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   ],
                 ),
               ),
-
-              // Main Header: Discover AI Art
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: Text.rich(
-                  TextSpan(
-                    text: 'Discover ',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.black,
-                    ),
-                    children: [
-                      TextSpan(
-                        text: 'AI Art',
-                        style: TextStyle(
-                          color: AppColors.coral,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
 
               // Horizontal active creators scroll
               SizedBox(
