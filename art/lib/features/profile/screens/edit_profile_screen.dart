@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -63,6 +64,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _cropAvatarImage(String sourcePath) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: sourcePath,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Profile Picture',
+            toolbarColor: AppColors.black,
+            toolbarWidgetColor: AppColors.creamLight,
+            activeControlsWidgetColor: AppColors.coral,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop Profile Picture',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+        ],
+      );
+
+      if (croppedFile != null) {
+        setState(() {
+          _imageFile = File(croppedFile.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to crop image: $e')),
+      );
+    }
+  }
+
   Future<void> _pickAvatarImage() async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
@@ -72,9 +106,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         imageQuality: 85,
       );
       if (pickedFile != null) {
-        setState(() {
-          _imageFile = File(pickedFile.path);
-        });
+        await _cropAvatarImage(pickedFile.path);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

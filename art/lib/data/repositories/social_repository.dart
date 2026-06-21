@@ -7,66 +7,77 @@ class SocialRepository {
   Future<bool> isFollowing(String followerId, String followingId) async {
     try {
       final response = await _client
-          .from('followers')
+          .from('follows')
           .select()
           .eq('follower_id', followerId)
           .eq('following_id', followingId)
           .maybeSingle();
       return response != null;
-    } catch (_) {
+    } catch (e) {
+      print('isFollowing error: $e');
       return false;
     }
   }
 
   Future<void> followUser(String followerId, String followingId) async {
     try {
-      await _client.from('followers').insert({
+      await _client.from('follows').insert({
         'follower_id': followerId,
         'following_id': followingId,
       });
-    } catch (_) {
-      // Already following or invalid
+    } catch (e) {
+      print('followUser error: $e');
     }
   }
 
   Future<void> unfollowUser(String followerId, String followingId) async {
     try {
       await _client
-          .from('followers')
+          .from('follows')
           .delete()
           .eq('follower_id', followerId)
           .eq('following_id', followingId);
-    } catch (_) {}
+    } catch (e) {
+      print('unfollowUser error: $e');
+    }
   }
 
   Future<List<ProfileModel>> fetchFollowers(String userId) async {
     try {
-      // Select profiles of followers where following_id matches target userId
+      // Query the 'follows' table and join with 'profiles' on 'follower_id'
       final response = await _client
-          .from('followers')
-          .select('profiles:follower_id(*)')
+          .from('follows')
+          .select('profiles!follower_id(*)')
           .eq('following_id', userId);
 
       return (response as List)
-          .map((json) => ProfileModel.fromJson(json['profiles']))
+          .map((json) {
+            final profileJson = json['profiles'];
+            return ProfileModel.fromJson(profileJson);
+          })
           .toList();
-    } catch (_) {
+    } catch (e) {
+      print('fetchFollowers error: $e');
       return [];
     }
   }
 
   Future<List<ProfileModel>> fetchFollowing(String userId) async {
     try {
-      // Select profiles of users that target userId is following
+      // Query the 'follows' table and join with 'profiles' on 'following_id'
       final response = await _client
-          .from('followers')
-          .select('profiles:following_id(*)')
+          .from('follows')
+          .select('profiles!following_id(*)')
           .eq('follower_id', userId);
 
       return (response as List)
-          .map((json) => ProfileModel.fromJson(json['profiles']))
+          .map((json) {
+            final profileJson = json['profiles'];
+            return ProfileModel.fromJson(profileJson);
+          })
           .toList();
-    } catch (_) {
+    } catch (e) {
+      print('fetchFollowing error: $e');
       return [];
     }
   }

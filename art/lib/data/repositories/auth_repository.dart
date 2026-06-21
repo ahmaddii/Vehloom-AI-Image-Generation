@@ -17,12 +17,16 @@ class AuthRepository {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      data: {
+        'username': username,
+        'display_name': username,
+      },
     );
 
     final user = response.user;
     if (user != null) {
-      // Create user profile in profiles table
-      await _client.from('profiles').insert({
+      // Create/Update user profile in profiles table
+      await _client.from('profiles').upsert({
         'id': user.id,
         'username': username,
         'display_name': username,
@@ -46,5 +50,11 @@ class AuthRepository {
 
   Future<void> signOut() async {
     await _client.auth.signOut();
+  }
+
+  Future<UserResponse> updatePassword(String newPassword) async {
+    return await _client.auth.updateUser(
+      UserAttributes(password: newPassword),
+    );
   }
 }

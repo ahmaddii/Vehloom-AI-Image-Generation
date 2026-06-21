@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../data/repositories/auth_repository.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +14,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _darkModeEnabled = false;
   bool _privateAccountEnabled = false;
+  String _userEmail = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _userEmail = AuthRepository().currentUser?.email ?? 'No email';
+  }
+
+  void _showChangePasswordDialog() {
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool isSubmitting = false;
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.creamBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text(
+                'Change Password',
+                style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: newPasswordController,
+                      obscureText: true,
+                      style: const TextStyle(color: AppColors.black),
+                      decoration: const InputDecoration(
+                        labelText: 'New Password',
+                        labelStyle: TextStyle(color: AppColors.darkGrey),
+                        focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.coral)),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: confirmPasswordController,
+                      obscureText: true,
+                      style: const TextStyle(color: AppColors.black),
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm Password',
+                        labelStyle: TextStyle(color: AppColors.darkGrey),
+                        focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.coral)),
+                      ),
+                      validator: (value) {
+                        if (value != newPasswordController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
+                ),
+                isSubmitting
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.coral),
+                        ),
+                      )
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.black,
+                          foregroundColor: AppColors.creamLight,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          if (formKey.currentState?.validate() ?? false) {
+                            setDialogState(() {
+                              isSubmitting = true;
+                            });
+                            try {
+                              await AuthRepository().updatePassword(newPasswordController.text);
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Password updated successfully!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setDialogState(() {
+                                isSubmitting = false;
+                              });
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error: ${e.toString()}'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          }
+                        },
+                        child: const Text('Update'),
+                      ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   Widget _buildSectionHeader(String title) {
     return Padding(
@@ -146,13 +274,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildListTile(
                 icon: Icons.lock_outline,
                 title: 'Change Password',
-                onTap: () {},
+                onTap: _showChangePasswordDialog,
               ),
               _buildDivider(),
               _buildListTile(
                 icon: Icons.mail_outline,
                 title: 'Email',
-                trailingText: 'hey@maya.art',
+                trailingText: _userEmail,
                 onTap: () {},
               ),
             ]),
@@ -239,8 +367,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.logout,
                 title: 'Log Out',
                 isRed: true,
-                onTap: () {
-                  context.go('/login');
+                onTap: () async {
+                  await AuthRepository().signOut();
+                  if (mounted) {
+                    context.go('/login');
+                  }
                 },
               ),
               _buildDivider(),

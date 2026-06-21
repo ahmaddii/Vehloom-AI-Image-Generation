@@ -16,6 +16,7 @@ import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/followers_list_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../features/home/screens/feed_view_all_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/onboarding1',
@@ -52,6 +53,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/',
       builder: (context, state) => const HomeFeedScreen(),
+    ),
+    GoRoute(
+      path: '/feed-view-all',
+      builder: (context, state) => const FeedViewAllScreen(),
     ),
 
     // Artwork Details

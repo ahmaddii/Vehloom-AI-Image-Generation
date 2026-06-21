@@ -22,6 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   late TabController _tabController;
   ProfileModel? _profile;
   List<ArtworkModel> _artworks = [];
+  List<ArtworkModel> _favoritedArtworks = [];
   int _followersCount = 0;
   int _followingCount = 0;
   bool _isFollowing = false;
@@ -66,6 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
       final profile = await ProfileRepository().getProfile(_targetUserId);
       final artworks = await ArtworkRepository().fetchUserArtworks(_targetUserId);
+      final favoritedArtworks = await ArtworkRepository().fetchUserFavorites(_targetUserId);
       
       final followers = await SocialRepository().fetchFollowers(_targetUserId);
       final following = await SocialRepository().fetchFollowing(_targetUserId);
@@ -79,6 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         setState(() {
           _profile = profile;
           _artworks = artworks;
+          _favoritedArtworks = favoritedArtworks;
           _followersCount = followers.length;
           _followingCount = following.length;
           _isFollowing = isFollowing;
@@ -126,28 +129,46 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     }
   }
 
-  Widget _buildStatColumn(String count, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          count,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.black,
+  Widget _buildStatColumn(String count, String label, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            count,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: AppColors.black.withOpacity(0.4),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.black.withOpacity(0.4),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  void _showSocialList(bool isFollowers) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SocialListBottomSheet(
+        title: isFollowers ? 'Followers' : 'Following',
+        userId: _targetUserId,
+        isFollowers: isFollowers,
+      ),
+    );
+    _loadProfileData();
   }
 
   @override
@@ -235,13 +256,20 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           ),
                           const SizedBox(height: 20),
                           
-                          // Stats Row
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               _buildStatColumn('${_artworks.length}', 'Posts'),
-                              _buildStatColumn('$_followersCount', 'Followers'),
-                              _buildStatColumn('$_followingCount', 'Following'),
+                              _buildStatColumn(
+                                '$_followersCount',
+                                'Followers',
+                                onTap: () => _showSocialList(true),
+                              ),
+                              _buildStatColumn(
+                                '$_followingCount',
+                                'Following',
+                                onTap: () => _showSocialList(false),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 20),
@@ -346,13 +374,38 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   },
                                 ),
                           
-                          // Saved Tab (Empty or mock)
-                          const Center(
-                            child: Text(
-                              'No saved artworks yet.',
-                              style: TextStyle(color: AppColors.darkGrey),
-                            ),
-                          ),
+                          // Saved Tab (Actual Favorites Grid)
+                          _favoritedArtworks.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'No saved artworks yet.',
+                                    style: TextStyle(color: AppColors.darkGrey),
+                                  ),
+                                )
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(2),
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    crossAxisSpacing: 2,
+                                    mainAxisSpacing: 2,
+                                  ),
+                                  itemCount: _favoritedArtworks.length,
+                                  itemBuilder: (context, index) {
+                                    final artwork = _favoritedArtworks[index];
+                                    return GestureDetector(
+                                      onTap: () => context.push('/artwork/${artwork.id}'),
+                                      child: CachedNetworkImage(
+                                        imageUrl: artwork.imageUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Container(color: AppColors.creamDark),
+                                        errorWidget: (context, url, error) => Container(
+                                          color: AppColors.creamDark,
+                                          child: const Icon(Icons.broken_image, color: AppColors.darkGrey),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                         ],
                       ),
                     ),
@@ -415,6 +468,157 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class SocialListBottomSheet extends StatefulWidget {
+  final String title;
+  final String userId;
+  final bool isFollowers;
+
+  const SocialListBottomSheet({
+    super.key,
+    required this.title,
+    required this.userId,
+    required this.isFollowers,
+  });
+
+  @override
+  State<SocialListBottomSheet> createState() => _SocialListBottomSheetState();
+}
+
+class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
+  List<ProfileModel> _users = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final users = widget.isFollowers
+          ? await SocialRepository().fetchFollowers(widget.userId)
+          : await SocialRepository().fetchFollowing(widget.userId);
+      if (mounted) {
+        setState(() {
+          _users = users;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.6,
+      decoration: const BoxDecoration(
+        color: AppColors.creamBg,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            widget.title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(color: AppColors.lightGrey, thickness: 1),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.coral))
+                : _users.isEmpty
+                    ? Center(
+                        child: Text(
+                          widget.isFollowers
+                              ? 'No followers yet.'
+                              : 'Not following anyone yet.',
+                          style: const TextStyle(color: AppColors.darkGrey, fontSize: 14),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: _users.length,
+                        itemBuilder: (context, index) {
+                          final user = _users[index];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(1.5),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.coral, width: 1),
+                              ),
+                              child: CircleAvatar(
+                                radius: 20,
+                                backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                                    ? CachedNetworkImageProvider(user.avatarUrl!)
+                                    : null,
+                                child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                                    ? const Icon(Icons.person, color: AppColors.black)
+                                    : null,
+                              ),
+                            ),
+                            title: Text(
+                              user.displayName ?? user.username,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                                fontSize: 15,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '@${user.username}',
+                              style: const TextStyle(
+                                color: AppColors.darkGrey,
+                                fontSize: 13,
+                              ),
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              final currentUserId = AuthRepository().currentUser?.id;
+                              if (user.id == currentUserId) {
+                                context.go('/profile');
+                              } else {
+                                context.push('/profile/${user.id}');
+                              }
+                            },
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

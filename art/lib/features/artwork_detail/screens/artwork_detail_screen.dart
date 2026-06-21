@@ -148,9 +148,15 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
       backgroundColor: AppColors.creamBg,
       appBar: AppBar(
         title: Text(
-          _artwork?.title ?? 'Artwork Detail',
-          style: const TextStyle(color: AppColors.black, fontWeight: FontWeight.bold),
+          _artwork?.title ?? 'Artwork',
+          style: const TextStyle(
+            color: AppColors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.coral))
@@ -166,41 +172,82 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     Expanded(
                       child: SingleChildScrollView(
                         controller: _scrollController,
+                        physics: const BouncingScrollPhysics(),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Large Artwork Image
-                            AspectRatio(
-                              aspectRatio: 1,
-                              child: CachedNetworkImage(
-                                imageUrl: _artwork!.imageUrl,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(color: AppColors.creamDark),
-                                errorWidget: (context, url, error) => Container(
-                                  color: AppColors.creamDark,
-                                  child: const Icon(Icons.broken_image, size: 48, color: AppColors.darkGrey),
+                            // Beautiful Hero Image Display with rounded bottom edges
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => FullScreenImageViewer(
+                                        imageUrl: _artwork!.imageUrl,
+                                        title: _artwork!.title,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: CachedNetworkImage(
+                                  imageUrl: _artwork!.imageUrl,
+                                  fit: BoxFit.fitWidth,
+                                  placeholder: (context, url) => Container(
+                                    height: 300,
+                                    color: AppColors.creamDark,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(color: AppColors.coral),
+                                    ),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    height: 300,
+                                    color: AppColors.creamDark,
+                                    child: const Icon(Icons.broken_image, size: 48, color: AppColors.darkGrey),
+                                  ),
                                 ),
                               ),
                             ),
 
-                            // Creator details and Likes row
+                            const SizedBox(height: 12),
+
+                            // Creator details and Likes row (Spaced out beautifully)
                             Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                               child: Row(
                                 children: [
                                   GestureDetector(
                                     onTap: () => context.push('/profile/${_artwork!.userId}'),
-                                    child: CircleAvatar(
-                                      radius: 20,
-                                      backgroundImage: _artwork!.authorAvatarUrl != null && _artwork!.authorAvatarUrl!.isNotEmpty
-                                          ? CachedNetworkImageProvider(_artwork!.authorAvatarUrl!)
-                                          : null,
-                                      child: _artwork!.authorAvatarUrl == null || _artwork!.authorAvatarUrl!.isEmpty
-                                          ? const Icon(Icons.person, color: AppColors.black)
-                                          : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.coral, width: 1.5),
+                                      ),
+                                      child: CircleAvatar(
+                                        radius: 22,
+                                        backgroundImage: _artwork!.authorAvatarUrl != null && _artwork!.authorAvatarUrl!.isNotEmpty
+                                            ? CachedNetworkImageProvider(_artwork!.authorAvatarUrl!)
+                                            : null,
+                                        child: _artwork!.authorAvatarUrl == null || _artwork!.authorAvatarUrl!.isEmpty
+                                            ? const Icon(Icons.person, color: AppColors.black)
+                                            : null,
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,21 +255,24 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                         Text(
                                           _artwork!.title,
                                           style: const TextStyle(
-                                            fontSize: 18,
+                                            fontSize: 22,
                                             fontWeight: FontWeight.bold,
                                             color: AppColors.black,
                                           ),
                                         ),
+                                        const SizedBox(height: 2),
                                         GestureDetector(
                                           onTap: () => context.push('/profile/${_artwork!.userId}'),
                                           child: Text(
                                             _artwork!.authorUsername != null
-                                                ? '@${_artwork!.authorUsername}'
+                                                ? (_artwork!.userId == _currentUserId
+                                                    ? '@${_artwork!.authorUsername} (You)'
+                                                    : '@${_artwork!.authorUsername}')
                                                 : 'Creator profile',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: AppColors.black.withOpacity(0.6),
-                                              fontWeight: FontWeight.w600,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: AppColors.coral,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
@@ -230,61 +280,136 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                     ),
                                   ),
                                   
-                                  // Like Actions
-                                  IconButton(
-                                    icon: Icon(
-                                      _isLiked ? Icons.favorite : Icons.favorite_border,
-                                      color: _isLiked ? AppColors.coral : AppColors.black,
-                                      size: 28,
+                                  // Like Actions in pill shaped chip
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.creamLight,
+                                      borderRadius: BorderRadius.circular(24),
+                                      border: Border.all(color: AppColors.lightGrey, width: 1),
                                     ),
-                                    onPressed: _toggleLike,
-                                  ),
-                                  Text(
-                                    '$_likesCount',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    child: Row(
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            _isLiked ? Icons.favorite : Icons.favorite_border,
+                                            color: _isLiked ? AppColors.coral : AppColors.black,
+                                            size: 24,
+                                          ),
+                                          constraints: const BoxConstraints(),
+                                          padding: EdgeInsets.zero,
+                                          onPressed: _toggleLike,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '$_likesCount',
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.black,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
                             ),
 
-                            // Description & Date
-                            if (_artwork!.description != null && _artwork!.description!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Text(
-                                  _artwork!.description!,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: AppColors.black,
-                                    height: 1.4,
-                                  ),
+                            // Artwork Description and Tags box
+                            if ((_artwork!.description != null && _artwork!.description!.isNotEmpty) ||
+                                _artwork!.tags.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.creamLight,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.lightGrey, width: 1),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (_artwork!.description != null && _artwork!.description!.isNotEmpty) ...[
+                                      Text(
+                                        _artwork!.description!,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: AppColors.black,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                      if (_artwork!.tags.isNotEmpty) const SizedBox(height: 12),
+                                    ],
+                                    if (_artwork!.tags.isNotEmpty)
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: _artwork!.tags.map((tag) {
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.creamBg,
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: AppColors.lightGrey, width: 0.5),
+                                            ),
+                                            child: Text(
+                                              '#$tag',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.coral,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                  ],
                                 ),
                               ),
 
-                            const Divider(height: 32, thickness: 1, color: AppColors.lightGrey),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              child: Divider(thickness: 1, color: AppColors.lightGrey),
+                            ),
 
                             // Comments Section Header
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'Comments',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.black,
-                                ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    'Comments',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.black,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${_comments.length}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.creamLight,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 12),
 
-                            // Comments List
+                            // Comments List rendered as bubble chats
                             _comments.isEmpty
                                 ? const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 32),
                                     child: Center(
                                       child: Text(
                                         'No comments yet. Start the conversation!',
@@ -295,66 +420,89 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 : ListView.builder(
                                     shrinkWrap: true,
                                     physics: const NeverScrollableScrollPhysics(),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                     itemCount: _comments.length,
                                     itemBuilder: (context, index) {
                                       final comment = _comments[index];
                                       return Padding(
-                                        padding: const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.only(bottom: 14),
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             GestureDetector(
                                               onTap: () => context.push('/profile/${comment.userId}'),
-                                              child: CircleAvatar(
-                                                radius: 16,
-                                                backgroundImage: comment.authorAvatarUrl != null && comment.authorAvatarUrl!.isNotEmpty
-                                                    ? CachedNetworkImageProvider(comment.authorAvatarUrl!)
-                                                    : null,
-                                                child: comment.authorAvatarUrl == null || comment.authorAvatarUrl!.isEmpty
-                                                    ? const Icon(Icons.person, size: 16, color: AppColors.black)
-                                                    : null,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(1.5),
+                                                decoration: const BoxDecoration(
+                                                  color: AppColors.coral,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: CircleAvatar(
+                                                  radius: 15,
+                                                  backgroundImage: comment.authorAvatarUrl != null && comment.authorAvatarUrl!.isNotEmpty
+                                                      ? CachedNetworkImageProvider(comment.authorAvatarUrl!)
+                                                      : null,
+                                                  child: comment.authorAvatarUrl == null || comment.authorAvatarUrl!.isEmpty
+                                                      ? const Icon(Icons.person, size: 15, color: AppColors.black)
+                                                      : null,
+                                                ),
                                               ),
                                             ),
-                                            const SizedBox(width: 10),
+                                            const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: [
-                                                  RichText(
-                                                    text: TextSpan(
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.creamLight,
+                                                      borderRadius: const BorderRadius.only(
+                                                        topRight: Radius.circular(16),
+                                                        bottomLeft: Radius.circular(16),
+                                                        bottomRight: Radius.circular(16),
+                                                      ),
+                                                      border: Border.all(color: AppColors.lightGrey, width: 0.5),
+                                                    ),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
                                                       children: [
-                                                        WidgetSpan(
-                                                          child: GestureDetector(
-                                                            onTap: () => context.push('/profile/${comment.userId}'),
-                                                            child: Text(
-                                                              comment.authorUsername != null
-                                                                  ? '@${comment.authorUsername}  '
-                                                                  : 'user  ',
-                                                              style: const TextStyle(
-                                                                fontWeight: FontWeight.bold,
-                                                                color: AppColors.black,
-                                                                fontSize: 13,
-                                                              ),
+                                                        GestureDetector(
+                                                          onTap: () => context.push('/profile/${comment.userId}'),
+                                                          child: Text(
+                                                            comment.authorUsername != null
+                                                                ? (comment.userId == _currentUserId
+                                                                    ? '@${comment.authorUsername} (You)'
+                                                                    : '@${comment.authorUsername}')
+                                                                : 'user',
+                                                            style: const TextStyle(
+                                                              fontWeight: FontWeight.bold,
+                                                              color: AppColors.coral,
+                                                              fontSize: 12,
                                                             ),
                                                           ),
                                                         ),
-                                                        TextSpan(
-                                                          text: comment.content,
+                                                        const SizedBox(height: 4),
+                                                        Text(
+                                                          comment.content,
                                                           style: const TextStyle(
                                                             color: AppColors.black,
-                                                            fontSize: 13.5,
+                                                            fontSize: 14,
+                                                            height: 1.3,
                                                           ),
                                                         ),
                                                       ],
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    '${comment.createdAt.hour}:${comment.createdAt.minute.toString().padLeft(2, '0')}',
-                                                    style: TextStyle(
-                                                      fontSize: 10,
-                                                      color: AppColors.black.withOpacity(0.4),
+                                                  const SizedBox(height: 4),
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(left: 4),
+                                                    child: Text(
+                                                      '${comment.createdAt.hour}:${comment.createdAt.minute.toString().padLeft(2, '0')}',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        color: AppColors.black.withOpacity(0.4),
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
@@ -365,13 +513,13 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                       );
                                     },
                                   ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 24),
                           ],
                         ),
                       ),
                     ),
 
-                    // Add Comment Bar at bottom
+                    // Flat Comment Bar at bottom
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: const BoxDecoration(
@@ -381,44 +529,100 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                         ),
                       ),
                       child: SafeArea(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.creamBg,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(color: AppColors.lightGrey, width: 1),
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.creamBg,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppColors.lightGrey, width: 1),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
                                 child: TextField(
                                   controller: _commentController,
+                                  style: const TextStyle(color: AppColors.black, fontSize: 14),
                                   decoration: const InputDecoration(
                                     hintText: 'Add a comment...',
-                                    hintStyle: TextStyle(color: AppColors.darkGrey, fontSize: 14),
+                                    hintStyle: TextStyle(color: AppColors.darkGrey, fontSize: 13),
                                     border: InputBorder.none,
-                                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    filled: false,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(vertical: 8),
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            _isSubmittingComment
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.coral),
-                                  )
-                                : IconButton(
-                                    icon: const Icon(Icons.send, color: AppColors.coral),
-                                    onPressed: _postComment,
-                                  ),
-                          ],
+                              const SizedBox(width: 8),
+                              _isSubmittingComment
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.coral),
+                                    )
+                                  : GestureDetector(
+                                      onTap: _postComment,
+                                      child: const Text(
+                                        'Post',
+                                        style: TextStyle(
+                                          color: AppColors.coral,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
+    );
+  }
+}
+
+class FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+
+  const FullScreenImageViewer({
+    super.key,
+    required this.imageUrl,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white, size: 28),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          boundaryMargin: const EdgeInsets.all(20),
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.contain,
+            placeholder: (context, url) => const CircularProgressIndicator(color: AppColors.coral),
+            errorWidget: (context, url, error) => const Icon(Icons.broken_image, color: Colors.white, size: 50),
+          ),
+        ),
+      ),
     );
   }
 }

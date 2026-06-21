@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/profile_model.dart';
+import '../../../data/models/artwork_model.dart';
 import '../../../data/repositories/profile_repository.dart';
+import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 
@@ -28,7 +30,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   List<ProfileModel> _creators = [];
+  List<Map<String, dynamic>> _trendingCreatorsData = [];
   List<ProfileModel> _searchResults = [];
+  List<ArtworkModel> _artworkSearchResults = [];
+  List<ArtworkModel> _tagSearchResults = [];
   Map<String, bool> _followingMap = {};
   bool _isSearching = false;
   bool _isLoading = true;
@@ -54,12 +59,13 @@ class _SearchScreenState extends State<SearchScreen> {
       _isLoading = true;
     });
     try {
-      final creators = await ProfileRepository().getCreators();
-      // Remove self from discover creators
-      creators.removeWhere((c) => c.id == _currentUserId);
+      final trendingData = await ProfileRepository().getTrendingCreators();
+      // Remove self
+      trendingData.removeWhere((item) => (item['profile'] as ProfileModel).id == _currentUserId);
       
       // Load following status for each creator
-      for (final creator in creators) {
+      for (final item in trendingData) {
+        final creator = item['profile'] as ProfileModel;
         if (_currentUserId.isNotEmpty) {
           final isFollowing = await SocialRepository().isFollowing(_currentUserId, creator.id);
           _followingMap[creator.id] = isFollowing;
@@ -68,7 +74,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
       if (mounted) {
         setState(() {
-          _creators = creators;
+          _trendingCreatorsData = trendingData;
+          _creators = trendingData.map((item) => item['profile'] as ProfileModel).toList();
         });
       }
     } catch (_) {}
@@ -86,6 +93,8 @@ class _SearchScreenState extends State<SearchScreen> {
         setState(() {
           _isSearching = false;
           _searchResults = [];
+          _artworkSearchResults = [];
+          _tagSearchResults = [];
         });
       }
       return;
@@ -97,25 +106,45 @@ class _SearchScreenState extends State<SearchScreen> {
       });
     }
 
+    List<ProfileModel> creatorResults = [];
     try {
-      final results = await ProfileRepository().searchProfiles(query);
-      // Remove self from results
-      results.removeWhere((c) => c.id == _currentUserId);
+      creatorResults = await ProfileRepository().searchProfiles(query);
+      creatorResults.removeWhere((c) => c.id == _currentUserId);
+    } catch (e) {
+      print('searchProfiles error: $e');
+    }
 
-      // Load following status for search results
-      for (final creator in results) {
-        if (_currentUserId.isNotEmpty && !_followingMap.containsKey(creator.id)) {
+    List<ArtworkModel> artworkResults = [];
+    try {
+      artworkResults = await ArtworkRepository().searchArtworks(query);
+    } catch (e) {
+      print('searchArtworks error: $e');
+    }
+
+    List<ArtworkModel> tagResults = [];
+    try {
+      tagResults = await ArtworkRepository().searchArtworksByTag(query);
+    } catch (e) {
+      print('searchArtworksByTag error: $e');
+    }
+
+    // Load following status for creators
+    for (final creator in creatorResults) {
+      if (_currentUserId.isNotEmpty && !_followingMap.containsKey(creator.id)) {
+        try {
           final isFollowing = await SocialRepository().isFollowing(_currentUserId, creator.id);
           _followingMap[creator.id] = isFollowing;
-        }
+        } catch (_) {}
       }
+    }
 
-      if (mounted) {
-        setState(() {
-          _searchResults = results;
-        });
-      }
-    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _searchResults = creatorResults;
+        _artworkSearchResults = artworkResults;
+        _tagSearchResults = tagResults;
+      });
+    }
   }
 
   Future<void> _toggleFollow(String targetUserId) async {
@@ -142,10 +171,283 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  Widget _buildArtistsList(List<ProfileModel> profiles) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: profiles.length,
+      itemBuilder: (context, index) {
+        final creator = profiles[index];
+        final isFollowing = _followingMap[creator.id] ?? false;
+
+        // Try to find trending metrics
+        final trendingItem = _trendingCreatorsData.firstWhere(
+          (item) => (item['profile'] as ProfileModel).id == creator.id,
+          orElse: () => <String, dynamic>{},
+        );
+
+        final likes = trendingItem['likes'] as int? ?? 0;
+        final followers = trendingItem['followers'] as int? ?? 0;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: GestureDetector(
+            onTap: () => context.push('/profile/${creator.id}'),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                // Avatar with border
+                CircleAvatar(
+                  radius: 26,
+                  backgroundImage: creator.avatarUrl != null && creator.avatarUrl!.isNotEmpty
+                      ? CachedNetworkImageProvider(creator.avatarUrl!)
+                      : null,
+                  child: creator.avatarUrl == null || creator.avatarUrl!.isEmpty
+                      ? const Icon(Icons.person, color: AppColors.black, size: 24)
+                      : null,
+                ),
+                const SizedBox(width: 16),
+
+                // Name & Username & Metrics
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        creator.displayName ?? creator.username,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '@${creator.username}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.black.withOpacity(0.5),
+                        ),
+                      ),
+                      if (likes > 0 || followers > 0) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.local_fire_department, color: Colors.orange.shade700, size: 14),
+                            const SizedBox(width: 2),
+                            Text(
+                              '$likes likes • $followers followers',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.black.withOpacity(0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Follow/Following button
+                ElevatedButton(
+                  onPressed: () => _toggleFollow(creator.id),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isFollowing ? AppColors.creamDark : AppColors.black,
+                    foregroundColor: isFollowing ? AppColors.black : AppColors.creamLight,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    isFollowing ? 'Following' : 'Follow',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildArtworkGrid(List<ArtworkModel> artworks) {
+    if (artworks.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: Text(
+            'No artworks found',
+            style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
+          ),
+        ),
+      );
+    }
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: artworks.length,
+      itemBuilder: (context, index) {
+        final artwork = artworks[index];
+        return GestureDetector(
+          onTap: () => context.push('/artwork/${artwork.id}'),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.creamLight,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.lightGrey, width: 1),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: CachedNetworkImage(
+                    imageUrl: artwork.imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(color: AppColors.creamDark),
+                    errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        artwork.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppColors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              artwork.authorUsername != null ? '@${artwork.authorUsername}' : 'user',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.black.withOpacity(0.5),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              const Icon(Icons.favorite, color: AppColors.coral, size: 12),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${artwork.likesCount}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchResultsView() {
+    switch (_selectedCategoryIndex) {
+      case 0: // All
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_searchResults.isNotEmpty) ...[
+              const Text(
+                'Artists',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildArtistsList(_searchResults.take(3).toList()),
+              const SizedBox(height: 24),
+            ],
+            if (_artworkSearchResults.isNotEmpty) ...[
+              const Text(
+                'Artworks',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildArtworkGrid(_artworkSearchResults),
+              const SizedBox(height: 24),
+            ],
+            if (_tagSearchResults.isNotEmpty) ...[
+              const Text(
+                'Matching Tags',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildArtworkGrid(_tagSearchResults),
+            ],
+            if (_searchResults.isEmpty && _artworkSearchResults.isEmpty && _tagSearchResults.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Text(
+                    'No results found',
+                    style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
+                  ),
+                ),
+              ),
+          ],
+        );
+      case 1: // Artists
+        return _buildArtistsList(_searchResults);
+      case 2: // Artwork
+        return _buildArtworkGrid(_artworkSearchResults);
+      case 3: // Tags
+        return _buildArtworkGrid(_tagSearchResults);
+      default:
+        return const SizedBox();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayCreators = _isSearching ? _searchResults : _creators;
-
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       body: SafeArea(
@@ -185,7 +487,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: TextField(
                         controller: _searchController,
                         decoration: const InputDecoration(
-                          hintText: 'Search artists or username',
+                          hintText: 'Search artists, artworks, or tags',
                           hintStyle: TextStyle(color: AppColors.darkGrey),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
@@ -305,7 +607,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
                           // Section Title
                           Text(
-                            _isSearching ? 'Search Results' : 'Discover Creators',
+                            _isSearching ? 'Search Results' : 'Trending Artists',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -314,99 +616,10 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Creators list
-                          displayCreators.isEmpty
-                              ? const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 40),
-                                    child: Text(
-                                      'No profiles found',
-                                      style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
-                                    ),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: displayCreators.length,
-                                  itemBuilder: (context, index) {
-                                    final creator = displayCreators[index];
-                                    final isFollowing = _followingMap[creator.id] ?? false;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 16),
-                                      child: GestureDetector(
-                                        onTap: () => context.push('/profile/${creator.id}'),
-                                        behavior: HitTestBehavior.opaque,
-                                        child: Row(
-                                          children: [
-                                            // Avatar with border
-                                            CircleAvatar(
-                                              radius: 26,
-                                              backgroundImage: creator.avatarUrl != null && creator.avatarUrl!.isNotEmpty
-                                                  ? CachedNetworkImageProvider(creator.avatarUrl!)
-                                                  : null,
-                                              child: creator.avatarUrl == null || creator.avatarUrl!.isEmpty
-                                                  ? const Icon(Icons.person, color: AppColors.black, size: 24)
-                                                  : null,
-                                            ),
-                                            const SizedBox(width: 16),
-
-                                            // Name & Username
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    creator.displayName ?? creator.username,
-                                                    style: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: AppColors.black,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    '@${creator.username}',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: AppColors.black.withOpacity(0.5),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-
-                                            // Follow/Following button
-                                            ElevatedButton(
-                                              onPressed: () => _toggleFollow(creator.id),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: isFollowing
-                                                    ? AppColors.creamDark
-                                                    : AppColors.black,
-                                                foregroundColor: isFollowing
-                                                    ? AppColors.black
-                                                    : AppColors.creamLight,
-                                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                minimumSize: Size.zero,
-                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                              ),
-                                              child: Text(
-                                                isFollowing ? 'Following' : 'Follow',
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                          // Display either search results or trending creators
+                          _isSearching
+                              ? _buildSearchResultsView()
+                              : _buildArtistsList(_creators),
                         ],
                       ),
                     ),
