@@ -34,14 +34,15 @@ class ProfileRepository {
   }
 
   Future<List<ProfileModel>> searchProfiles(String query) async {
-    if (query.trim().isEmpty) return [];
+    final cleanQuery = query.trim().replaceAll('#', '');
+    if (cleanQuery.isEmpty) return [];
     try {
       final response = await _client
           .from('profiles')
           .select()
-          .or('username.ilike.%$query%,display_name.ilike.%$query%')
+          .or('username.ilike.%$cleanQuery%,display_name.ilike.%$cleanQuery%')
           .limit(20);
-      
+
       return (response as List)
           .map((json) => ProfileModel.fromJson(json))
           .toList();
@@ -52,10 +53,7 @@ class ProfileRepository {
 
   Future<List<ProfileModel>> getCreators() async {
     try {
-      final response = await _client
-          .from('profiles')
-          .select()
-          .limit(15);
+      final response = await _client.from('profiles').select().limit(15);
       return (response as List)
           .map((json) => ProfileModel.fromJson(json))
           .toList();
@@ -82,11 +80,12 @@ class ProfileRepository {
 
   Future<String> uploadAvatar(File file, String userId) async {
     final fileExtension = file.path.split('.').last;
-    final path = '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
-    
+    final path =
+        '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+
     // Upload image to 'avatars' bucket
     await _client.storage.from('avatars').upload(path, file);
-    
+
     // Get public URL
     final imageUrl = _client.storage.from('avatars').getPublicUrl(path);
     return imageUrl;
@@ -95,7 +94,10 @@ class ProfileRepository {
   Future<List<Map<String, dynamic>>> getTrendingCreators() async {
     try {
       // 1. Fetch profiles
-      final profilesResponse = await _client.from('profiles').select().limit(50);
+      final profilesResponse = await _client
+          .from('profiles')
+          .select()
+          .limit(50);
       final List<ProfileModel> profiles = (profilesResponse as List)
           .map((json) => ProfileModel.fromJson(json))
           .toList();
@@ -104,33 +106,33 @@ class ProfileRepository {
       final artworksResponse = await _client
           .from('artworks')
           .select('user_id, likes:likes(count)');
-      
+
       // Calculate total likes per user
       final Map<String, int> userLikes = {};
-      if (artworksResponse is List) {
-        for (final art in artworksResponse) {
-          final userId = art['user_id'] as String;
-          int likes = 0;
-          if (art['likes'] is List) {
-            final list = art['likes'] as List;
-            if (list.isNotEmpty && list.first is Map && list.first['count'] != null) {
-              likes = list.first['count'] as int;
-            } else {
-              likes = list.length;
-            }
+      for (final art in artworksResponse) {
+        final userId = art['user_id'] as String;
+        int likes = 0;
+        if (art['likes'] is List) {
+          final list = art['likes'] as List;
+          if (list.isNotEmpty &&
+              list.first is Map &&
+              list.first['count'] != null) {
+            likes = list.first['count'] as int;
+          } else {
+            likes = list.length;
           }
-          userLikes[userId] = (userLikes[userId] ?? 0) + likes;
         }
+        userLikes[userId] = (userLikes[userId] ?? 0) + likes;
       }
 
       // 3. Fetch all follows to compute followers
-      final followsResponse = await _client.from('follows').select('following_id');
+      final followsResponse = await _client
+          .from('follows')
+          .select('following_id');
       final Map<String, int> userFollowers = {};
-      if (followsResponse is List) {
-        for (final follow in followsResponse) {
-          final followingId = follow['following_id'] as String;
-          userFollowers[followingId] = (userFollowers[followingId] ?? 0) + 1;
-        }
+      for (final follow in followsResponse) {
+        final followingId = follow['following_id'] as String;
+        userFollowers[followingId] = (userFollowers[followingId] ?? 0) + 1;
       }
 
       // 4. Compute score for each profile
@@ -138,7 +140,8 @@ class ProfileRepository {
       for (final profile in profiles) {
         final likes = userLikes[profile.id] ?? 0;
         final followers = userFollowers[profile.id] ?? 0;
-        final score = likes + (followers * 5); // weight followers slightly higher
+        final score =
+            likes + (followers * 5); // weight followers slightly higher
         trending.add({
           'profile': profile,
           'likes': likes,

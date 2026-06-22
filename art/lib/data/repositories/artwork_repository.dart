@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/artwork_model.dart';
 import '../models/comment_model.dart';
+import 'notification_repository.dart';
 
 class ArtworkRepository {
   final SupabaseClient _client = Supabase.instance.client;
+  final NotificationRepository _notificationRepository =
+      NotificationRepository();
 
   Future<List<ArtworkModel>> fetchLatestArtworks() async {
     try {
@@ -116,11 +119,19 @@ class ArtworkRepository {
           .delete()
           .eq('artwork_id', artworkId)
           .eq('user_id', userId);
+      await _notificationRepository.deleteLikeNotification(
+        artworkId: artworkId,
+        actorId: userId,
+      );
     } else {
       await _client.from('likes').insert({
         'artwork_id': artworkId,
         'user_id': userId,
       });
+      await _notificationRepository.createLikeNotification(
+        artworkId: artworkId,
+        actorId: userId,
+      );
     }
   }
 
@@ -155,6 +166,13 @@ class ArtworkRepository {
         })
         .select('*, profiles:user_id(username, display_name, avatar_url)')
         .single();
+
+    await _notificationRepository.createCommentNotification(
+      artworkId: artworkId,
+      actorId: userId,
+      commentId: response['id'] as String,
+      commentContent: content,
+    );
 
     return CommentModel.fromJson(response);
   }
@@ -210,14 +228,16 @@ class ArtworkRepository {
   }
 
   Future<List<ArtworkModel>> searchArtworks(String query) async {
-    if (query.trim().isEmpty) return [];
+    final cleanQuery = query.trim().replaceAll('#', '');
+    if (cleanQuery.isEmpty) return [];
     try {
       final response = await _client
           .from('artworks')
           .select(
             '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
           )
-          .or('title.ilike.%$query%,description.ilike.%$query%')
+          .or('title.ilike.%$cleanQuery%,description.ilike.%$cleanQuery%')
+          .order('created_at', ascending: false)
           .limit(20);
 
       return (response as List)
@@ -229,21 +249,122 @@ class ArtworkRepository {
   }
 
   Future<List<ArtworkModel>> searchArtworksByTag(String tag) async {
-    if (tag.trim().isEmpty) return [];
+    final cleanTag = tag.trim().replaceAll('#', '').toLowerCase();
+    if (cleanTag.isEmpty) return [];
     try {
       final response = await _client
           .from('artworks')
           .select(
             '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
           )
-          .overlaps('tags', [tag])
-          .limit(20);
+          .order('created_at', ascending: false)
+          .limit(100);
 
       return (response as List)
           .map((json) => ArtworkModel.fromJson(json))
+          .where(
+            (artwork) => artwork.tags.any(
+              (item) => item.trim().toLowerCase().contains(cleanTag),
+            ),
+          )
+          .take(20)
           .toList();
     } catch (_) {
       return [];
     }
+  }
+
+  Future<List<ArtworkModel>> fetchTrendingArtworks({int limit = 20}) async {
+    try {
+      final response = await _client
+          .from('artworks')
+          .select(
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+          )
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      final artworks =
+          (response as List).map((json) => ArtworkModel.fromJson(json)).toList()
+            ..sort((a, b) {
+              final aScore = (a.likesCount * 3) + a.commentsCount;
+              final bScore = (b.likesCount * 3) + b.commentsCount;
+              if (aScore == bScore) {
+                return b.createdAt.compareTo(a.createdAt);
+              }
+              return bScore.compareTo(aScore);
+            });
+
+      return artworks.take(limit).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<String>> fetchTrendingTags({int limit = 8}) async {
+    try {
+      final response = await _client
+          .from('artworks')
+          .select('tags, created_at, likes:likes(count)')
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      final Map<String, _TagTrend> tagTrends = {};
+      for (final json in response as List) {
+        final tags = List<String>.from(json['tags'] ?? []);
+        final createdAt = DateTime.tryParse(
+          json['created_at'] as String? ?? '',
+        );
+        int likes = 0;
+        final likesData = json['likes'];
+        if (likesData is List &&
+            likesData.isNotEmpty &&
+            likesData.first is Map &&
+            likesData.first['count'] != null) {
+          likes = likesData.first['count'] as int;
+        }
+
+        for (final tag in tags) {
+          final cleanTag = tag.trim();
+          if (cleanTag.isEmpty) continue;
+          final key = cleanTag.toLowerCase();
+          final trend = tagTrends.putIfAbsent(
+            key,
+            () => _TagTrend(label: cleanTag),
+          );
+          trend.count += 1;
+          trend.likes += likes;
+          if (createdAt != null &&
+              (trend.latest == null || createdAt.isAfter(trend.latest!))) {
+            trend.latest = createdAt;
+          }
+        }
+      }
+
+      final trends = tagTrends.values.toList()
+        ..sort((a, b) => b.score.compareTo(a.score));
+
+      return trends.take(limit).map((trend) => '#${trend.label}').toList();
+    } catch (_) {
+      return [];
+    }
+  }
+}
+
+class _TagTrend {
+  _TagTrend({required this.label});
+
+  final String label;
+  int count = 0;
+  int likes = 0;
+  DateTime? latest;
+
+  int get score {
+    final recencyBoost = latest == null
+        ? 0
+        : DateTime.now().difference(latest!).inDays <= 7
+        ? 3
+        : 0;
+    return (count * 10) + likes + recencyBoost;
   }
 }

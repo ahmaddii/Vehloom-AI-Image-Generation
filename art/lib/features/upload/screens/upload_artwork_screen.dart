@@ -21,8 +21,19 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
 
-  // Default tags matching the design screenshot
-  final List<String> _tags = ['AI Art', 'Fantasy', 'Portrait'];
+  final List<String> _tags = ['AI Art', 'Digital Art', 'Fantasy'];
+  final List<String> _suggestedTags = [
+    'Portrait',
+    'Landscape',
+    'Concept Art',
+    'Character Design',
+    'Abstract',
+    'Surreal',
+    'Cyberpunk',
+    'Nature',
+    'Sci-Fi',
+    'Minimal',
+  ];
 
   @override
   void dispose() {
@@ -125,7 +136,8 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
           : 'landscape';
 
       final finalTags = List<String>.from(_tags);
-      if (!finalTags.contains('portrait') && !finalTags.contains('landscape')) {
+      if (!_containsTag(finalTags, 'portrait') &&
+          !_containsTag(finalTags, 'landscape')) {
         finalTags.add(orientationTag);
       }
 
@@ -166,10 +178,76 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
   }
 
   void _addTag(String tag) {
-    if (tag.trim().isNotEmpty && !_tags.contains(tag.trim())) {
+    final cleanTag = tag.trim();
+    if (cleanTag.isNotEmpty && !_containsTag(_tags, cleanTag)) {
       setState(() {
-        _tags.add(tag.trim());
+        _tags.add(cleanTag);
       });
+    }
+  }
+
+  bool _containsTag(List<String> tags, String tag) {
+    final cleanTag = tag.trim().toLowerCase();
+    return tags.any((item) => item.trim().toLowerCase() == cleanTag);
+  }
+
+  Future<void> _closeScreen() async {
+    final hasDraft =
+        _imageFile != null ||
+        _titleController.text.trim().isNotEmpty ||
+        _descriptionController.text.trim().isNotEmpty ||
+        _tags.length > 3;
+
+    if (!hasDraft) {
+      context.pop();
+      return;
+    }
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.creamBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Discard post?',
+          style: TextStyle(color: AppColors.black, fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          'Your selected artwork, text, and tags will be lost.',
+          style: TextStyle(color: AppColors.darkGrey, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Keep editing',
+              style: TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.coral,
+              foregroundColor: AppColors.creamLight,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Discard',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (mounted && shouldDiscard == true) {
+      context.pop();
     }
   }
 
@@ -207,7 +285,10 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.coral, width: 1.5),
+              borderSide: BorderSide(
+                color: AppColors.coral.withOpacity(0.55),
+                width: 1.2,
+              ),
             ),
           ),
         ),
@@ -248,6 +329,35 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
     );
   }
 
+  InputDecoration _fieldDecoration({
+    required String hintText,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(color: AppColors.black.withOpacity(0.34)),
+      prefixIcon: Icon(icon, color: AppColors.coral, size: 20),
+      filled: true,
+      fillColor: AppColors.creamLight.withOpacity(0.92),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: AppColors.lightGrey),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(
+          color: AppColors.coral.withOpacity(0.55),
+          width: 1.2,
+        ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: AppColors.lightGrey.withOpacity(0.5)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -265,7 +375,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
             ),
             child: IconButton(
               icon: const Icon(Icons.close, color: AppColors.black, size: 18),
-              onPressed: () => context.pop(),
+              onPressed: _isUploading ? null : _closeScreen,
             ),
           ),
         ),
@@ -293,16 +403,26 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                   ),
                 )
               : Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: TextButton(
-                    onPressed: _postArtwork,
-                    child: const Text(
-                      'Post',
-                      style: TextStyle(
-                        color: AppColors.black,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                  padding: const EdgeInsets.only(right: 12.0),
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.black,
+                      foregroundColor: AppColors.creamLight,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
                       ),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: _postArtwork,
+                    icon: const Icon(Icons.publish_outlined, size: 16),
+                    label: const Text(
+                      'Post',
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                 ),
@@ -328,31 +448,27 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Upload Container (Glassmorphic / Shadow Card representation)
                     GestureDetector(
                       onTap: _isUploading ? null : _pickImage,
                       child: AspectRatio(
-                        aspectRatio: 1.1,
+                        aspectRatio: 0.96,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: AppColors.creamLight.withOpacity(0.7),
-                            borderRadius: BorderRadius.circular(28),
+                            color: _imageFile != null
+                                ? AppColors.black
+                                : AppColors.creamLight,
+                            borderRadius: BorderRadius.circular(24),
                             border: Border.all(
                               color: _imageFile != null
-                                  ? Colors.transparent
-                                  : AppColors.coral.withOpacity(0.2),
-                              width: 1.5,
+                                  ? AppColors.black
+                                  : AppColors.coral.withOpacity(0.18),
+                              width: 1,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.coral.withOpacity(0.04),
-                                blurRadius: 24,
-                                offset: const Offset(0, 12),
-                              ),
-                              BoxShadow(
-                                color: AppColors.black.withOpacity(0.02),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
+                                color: AppColors.coral.withOpacity(0.08),
+                                blurRadius: 26,
+                                offset: const Offset(0, 14),
                               ),
                             ],
                           ),
@@ -361,7 +477,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                                   children: [
                                     Positioned.fill(
                                       child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(28),
+                                        borderRadius: BorderRadius.circular(24),
                                         child: Image.file(
                                           _imageFile!,
                                           fit: BoxFit.cover,
@@ -373,7 +489,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                                       child: Container(
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(
-                                            28,
+                                            24,
                                           ),
                                           gradient: LinearGradient(
                                             begin: Alignment.topCenter,
@@ -386,117 +502,162 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                                         ),
                                       ),
                                     ),
-                                    // Floating Change / Crop Button
                                     Positioned(
-                                      bottom: 16,
-                                      left: 0,
-                                      right: 0,
-                                      child: Center(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: AppColors.creamLight
-                                                .withOpacity(0.9),
-                                            borderRadius: BorderRadius.circular(
-                                              30,
+                                      top: 14,
+                                      right: 14,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: AppColors.creamLight
+                                              .withOpacity(0.94),
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.tune,
+                                              size: 15,
+                                              color: AppColors.black,
                                             ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                  0.15,
-                                                ),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 4),
+                                            SizedBox(width: 6),
+                                            Text(
+                                              'Adjust',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.black,
                                               ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 18,
-                                            vertical: 10,
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.edit_outlined,
-                                                size: 16,
-                                                color: AppColors.coral,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Adjust / Change',
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: AppColors.black,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const Positioned(
+                                      left: 18,
+                                      right: 18,
+                                      bottom: 18,
+                                      child: Text(
+                                        'Artwork preview',
+                                        style: TextStyle(
+                                          color: AppColors.creamLight,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          shadows: [
+                                            Shadow(
+                                              blurRadius: 8,
+                                              color: Colors.black54,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
                                   ],
                                 )
-                              : Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            AppColors.coral.withOpacity(0.15),
-                                            AppColors.coral.withOpacity(0.04),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.coral.withOpacity(
-                                              0.08,
-                                            ),
-                                            blurRadius: 20,
-                                            offset: const Offset(0, 8),
-                                          ),
+                              : ClipRRect(
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppColors.creamLight,
+                                          AppColors.creamBg,
+                                          AppColors.coral.withOpacity(0.18),
                                         ],
                                       ),
-                                      alignment: Alignment.center,
-                                      child: Container(
-                                        width: 52,
-                                        height: 52,
-                                        decoration: const BoxDecoration(
-                                          color: AppColors.creamLight,
-                                          shape: BoxShape.circle,
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        Positioned(
+                                          top: 18,
+                                          left: 18,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 7,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.coral
+                                                  .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(18),
+                                              border: Border.all(
+                                                color: AppColors.coral
+                                                    .withOpacity(0.18),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'Gallery upload',
+                                              style: TextStyle(
+                                                color: AppColors.coral,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
                                         ),
-                                        child: const Icon(
-                                          Icons.add_photo_alternate_outlined,
-                                          color: AppColors.coral,
-                                          size: 26,
+                                        Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                width: 78,
+                                                height: 78,
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.creamLight,
+                                                  borderRadius:
+                                                      BorderRadius.circular(22),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: AppColors.coral
+                                                          .withOpacity(0.16),
+                                                      blurRadius: 18,
+                                                      offset: const Offset(
+                                                        0,
+                                                        8,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                child: const Icon(
+                                                  Icons
+                                                      .add_photo_alternate_outlined,
+                                                  color: AppColors.coral,
+                                                  size: 32,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 18),
+                                              const Text(
+                                                'Choose your artwork',
+                                                style: TextStyle(
+                                                  color: AppColors.black,
+                                                  fontSize: 22,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 7),
+                                              Text(
+                                                'Ready for the gallery.',
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  color: AppColors.darkGrey,
+                                                  fontSize: 13,
+                                                  height: 1.35,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 20),
-                                    const Text(
-                                      'Add your masterpiece',
-                                      style: TextStyle(
-                                        color: AppColors.black,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Tap to upload your artwork',
-                                      style: TextStyle(
-                                        color: AppColors.black.withOpacity(0.4),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                         ),
                       ),
@@ -504,88 +665,47 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Title Field
+                    const Text(
+                      'DETAILS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkGrey,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
                     TextFormField(
                       controller: _titleController,
                       enabled: !_isUploading,
                       style: const TextStyle(
                         color: AppColors.black,
                         fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
-                      decoration: InputDecoration(
+                      textInputAction: TextInputAction.next,
+                      decoration: _fieldDecoration(
                         hintText: 'Title',
-                        hintStyle: TextStyle(
-                          color: AppColors.black.withOpacity(0.3),
-                        ),
-                        filled: true,
-                        fillColor: AppColors.creamLight.withOpacity(0.8),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: AppColors.lightGrey,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: AppColors.coral,
-                            width: 1.5,
-                          ),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color: AppColors.lightGrey.withOpacity(0.5),
-                          ),
-                        ),
+                        icon: Icons.drive_file_rename_outline,
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // Description Field
                     TextFormField(
                       controller: _descriptionController,
                       enabled: !_isUploading,
-                      maxLines: 4,
+                      minLines: 3,
+                      maxLines: 5,
                       style: const TextStyle(
                         color: AppColors.black,
                         fontSize: 15,
+                        height: 1.35,
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'Write a description...',
-                        hintStyle: TextStyle(
-                          color: AppColors.black.withOpacity(0.3),
-                        ),
-                        filled: true,
-                        fillColor: AppColors.creamLight.withOpacity(0.8),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: AppColors.lightGrey,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: AppColors.coral,
-                            width: 1.5,
-                          ),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color: AppColors.lightGrey.withOpacity(0.5),
-                          ),
-                        ),
+                      decoration: _fieldDecoration(
+                        hintText: 'Description',
+                        icon: Icons.notes_outlined,
                       ),
                     ),
 
@@ -664,6 +784,65 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                           ),
                         ),
                       ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    const Text(
+                      'SUGGESTED',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkGrey,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _suggestedTags.map((tag) {
+                        final isSelected = _containsTag(_tags, tag);
+                        return ActionChip(
+                          avatar: Icon(
+                            isSelected ? Icons.check : Icons.add,
+                            size: 14,
+                            color: isSelected
+                                ? AppColors.creamLight
+                                : AppColors.black,
+                          ),
+                          label: Text(tag),
+                          onPressed: _isUploading || isSelected
+                              ? null
+                              : () => _addTag(tag),
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: isSelected
+                                ? AppColors.creamLight
+                                : AppColors.black,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          backgroundColor: isSelected
+                              ? AppColors.black
+                              : AppColors.creamLight.withOpacity(0.8),
+                          disabledColor: isSelected
+                              ? AppColors.black
+                              : AppColors.creamLight.withOpacity(0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          side: BorderSide(
+                            color: isSelected
+                                ? AppColors.black
+                                : AppColors.lightGrey,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                        );
+                      }).toList(),
                     ),
 
                     const SizedBox(height: 24),

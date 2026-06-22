@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/artwork_model.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
+import '../../../data/repositories/notification_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -30,18 +32,108 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   List<ProfileModel> _creators = [];
   List<ArtworkModel> _masonryArtworks = [];
   bool _isLoading = true;
+  int _unreadNotificationsCount = 0;
+  RealtimeChannel? _notificationsChannel;
+  RealtimeChannel? _feedChannel;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadUnreadNotificationsCount();
+    _subscribeToNotificationBadge();
+    _subscribeToFeedUpdates();
   }
 
-  Future<void> _loadData() async {
+  @override
+  void dispose() {
+    final channel = _notificationsChannel;
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+    final feedChannel = _feedChannel;
+    if (feedChannel != null) {
+      Supabase.instance.client.removeChannel(feedChannel);
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadUnreadNotificationsCount() async {
+    final currentUserId = AuthRepository().currentUser?.id;
+    if (currentUserId == null) return;
+
+    final count = await NotificationRepository().fetchUnreadCount(
+      currentUserId,
+    );
     if (!mounted) return;
     setState(() {
-      _isLoading = true;
+      _unreadNotificationsCount = count;
     });
+  }
+
+  void _subscribeToNotificationBadge() {
+    final currentUserId = AuthRepository().currentUser?.id;
+    if (currentUserId == null) return;
+
+    _notificationsChannel = Supabase.instance.client
+        .channel('home-notification-badge:$currentUserId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'recipient_id',
+            value: currentUserId,
+          ),
+          callback: (_) => _loadUnreadNotificationsCount(),
+        )
+        .subscribe();
+  }
+
+  void _subscribeToFeedUpdates() {
+    _feedChannel = Supabase.instance.client
+        .channel('home-feed-live')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'artworks',
+          callback: (_) => _loadData(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'likes',
+          callback: (_) => _loadData(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'comments',
+          callback: (_) => _loadData(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'follows',
+          callback: (_) => _loadData(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'profiles',
+          callback: (_) => _loadData(showLoading: false),
+        )
+        .subscribe();
+  }
+
+  Future<void> _loadData({bool showLoading = true}) async {
+    if (!mounted) return;
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     try {
       final artworks = await ArtworkRepository().fetchLatestArtworks();
       final currentUserId = AuthRepository().currentUser?.id;
@@ -50,15 +142,21 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       if (currentUserId != null) {
         // Fetch current user's profile
         myProfile = await ProfileRepository().getProfile(currentUserId);
-        
+
         // Fallback to Auth metadata if profiles table record is missing/delayed
         if (myProfile == null) {
           final email = AuthRepository().currentUser?.email ?? '';
-          final metaUsername = AuthRepository().currentUser?.userMetadata?['username'] as String? ?? email.split('@').first;
+          final metaUsername =
+              AuthRepository().currentUser?.userMetadata?['username']
+                  as String? ??
+              email.split('@').first;
           myProfile = ProfileModel(
             id: currentUserId,
             username: metaUsername,
-            displayName: AuthRepository().currentUser?.userMetadata?['display_name'] as String? ?? metaUsername,
+            displayName:
+                AuthRepository().currentUser?.userMetadata?['display_name']
+                    as String? ??
+                metaUsername,
             avatarUrl: '',
             bio: 'Artist member',
             createdAt: DateTime.now(),
@@ -81,7 +179,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     } catch (e) {
       print('HomeFeedScreen _loadData error: $e');
     }
-    if (mounted) {
+    if (mounted && showLoading) {
       setState(() {
         _isLoading = false;
       });
@@ -90,12 +188,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   List<ArtworkModel> get _filteredArtworks {
     final currentUserId = AuthRepository().currentUser?.id;
-    if (currentUserId == null) return _masonryArtworks;
 
     switch (_selectedCategoryIndex) {
       case 0: // For You
         return _masonryArtworks;
       case 1: // Following
+        if (currentUserId == null) return [];
         final followedIds = _creators
             .where((c) => c.id != currentUserId)
             .map((c) => c.id)
@@ -104,28 +202,26 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             .where((art) => followedIds.contains(art.userId))
             .toList();
       case 2: // Portrait
-        return _masonryArtworks
-            .where(
-              (art) =>
-                  art.userId == currentUserId &&
-                  (art.tags.contains('portrait') ||
-                      (!art.tags.contains('landscape') &&
-                          art.id.hashCode % 2 == 0)),
-            )
-            .toList();
+        return _masonryArtworks.where(_isPortraitArtwork).toList();
       case 3: // Landscape
-        return _masonryArtworks
-            .where(
-              (art) =>
-                  art.userId == currentUserId &&
-                  (art.tags.contains('landscape') ||
-                      (!art.tags.contains('portrait') &&
-                          art.id.hashCode % 2 != 0)),
-            )
-            .toList();
+        return _masonryArtworks.where(_isLandscapeArtwork).toList();
       default:
         return _masonryArtworks;
     }
+  }
+
+  bool _hasTag(ArtworkModel artwork, String tag) {
+    return artwork.tags.any((item) => item.trim().toLowerCase() == tag);
+  }
+
+  bool _isPortraitArtwork(ArtworkModel artwork) {
+    final hasPortrait = _hasTag(artwork, 'portrait');
+    final hasLandscape = _hasTag(artwork, 'landscape');
+    return hasPortrait && !hasLandscape;
+  }
+
+  bool _isLandscapeArtwork(ArtworkModel artwork) {
+    return _hasTag(artwork, 'landscape');
   }
 
   double _getAspectRatioForIndex(int index) {
@@ -133,6 +229,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     return ratios[index % ratios.length];
   }
 
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.creamBg,
@@ -181,8 +278,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     ),
                     Row(
                       children: [
-                        // Notification Bell with Red Dot
+                        // Notification Bell
                         Stack(
+                          clipBehavior: Clip.none,
                           children: [
                             Container(
                               decoration: const BoxDecoration(
@@ -195,21 +293,55 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                                   color: AppColors.black,
                                   size: 24,
                                 ),
-                                onPressed: () => context.push('/notifications'),
+                                onPressed: () async {
+                                  await context.push('/notifications');
+                                  await _loadUnreadNotificationsCount();
+                                },
                               ),
                             ),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.coral,
-                                  shape: BoxShape.circle,
+                            if (_unreadNotificationsCount > 0)
+                              Positioned(
+                                top: -4,
+                                right: -4,
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 20,
+                                    minHeight: 20,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.coral,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: AppColors.creamBg,
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.coral.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    _unreadNotificationsCount > 99
+                                        ? '99+'
+                                        : '$_unreadNotificationsCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      height: 1,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
                           ],
                         ),
                         const SizedBox(width: 12),
@@ -547,7 +679,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
-                                                artwork.userId == AuthRepository().currentUser?.id
+                                                artwork.userId ==
+                                                        AuthRepository()
+                                                            .currentUser
+                                                            ?.id
                                                     ? '@${artwork.authorUsername} (You)'
                                                     : '@${artwork.authorUsername}',
                                                 style: const TextStyle(

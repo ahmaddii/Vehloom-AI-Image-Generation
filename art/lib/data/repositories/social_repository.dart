@@ -1,8 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/profile_model.dart';
+import 'notification_repository.dart';
 
 class SocialRepository {
   final SupabaseClient _client = Supabase.instance.client;
+  final NotificationRepository _notificationRepository =
+      NotificationRepository();
 
   Future<bool> isFollowing(String followerId, String followingId) async {
     try {
@@ -25,6 +28,10 @@ class SocialRepository {
         'follower_id': followerId,
         'following_id': followingId,
       });
+      await _notificationRepository.createFollowNotification(
+        followerId: followerId,
+        followingId: followingId,
+      );
     } catch (e) {
       print('followUser error: $e');
     }
@@ -37,6 +44,10 @@ class SocialRepository {
           .delete()
           .eq('follower_id', followerId)
           .eq('following_id', followingId);
+      await _notificationRepository.deleteFollowNotification(
+        followerId: followerId,
+        followingId: followingId,
+      );
     } catch (e) {
       print('unfollowUser error: $e');
     }
@@ -50,12 +61,10 @@ class SocialRepository {
           .select('profiles!follower_id(*)')
           .eq('following_id', userId);
 
-      return (response as List)
-          .map((json) {
-            final profileJson = json['profiles'];
-            return ProfileModel.fromJson(profileJson);
-          })
-          .toList();
+      return (response as List).map((json) {
+        final profileJson = json['profiles'];
+        return ProfileModel.fromJson(profileJson);
+      }).toList();
     } catch (e) {
       print('fetchFollowers error: $e');
       return [];
@@ -70,12 +79,10 @@ class SocialRepository {
           .select('profiles!following_id(*)')
           .eq('follower_id', userId);
 
-      return (response as List)
-          .map((json) {
-            final profileJson = json['profiles'];
-            return ProfileModel.fromJson(profileJson);
-          })
-          .toList();
+      return (response as List).map((json) {
+        final profileJson = json['profiles'];
+        return ProfileModel.fromJson(profileJson);
+      }).toList();
     } catch (e) {
       print('fetchFollowing error: $e');
       return [];

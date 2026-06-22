@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/onboarding/screens/onboarding_screen_1.dart';
 import '../../features/onboarding/screens/onboarding_screen_2.dart';
@@ -18,8 +22,47 @@ import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/home/screens/feed_view_all_screen.dart';
 
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) {
+      notifyListeners();
+    });
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+final _authRefresh = GoRouterRefreshStream(
+  Supabase.instance.client.auth.onAuthStateChange,
+);
+
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/onboarding1',
+  initialLocation: Supabase.instance.client.auth.currentSession == null
+      ? '/onboarding1'
+      : '/',
+  refreshListenable: _authRefresh,
+  redirect: (context, state) {
+    final isLoggedIn = Supabase.instance.client.auth.currentSession != null;
+    final location = state.uri.path;
+    final isAuthRoute =
+        location == '/login' ||
+        location == '/signup' ||
+        location == '/forgot-password';
+    final isOnboardingRoute = location.startsWith('/onboarding');
+
+    if (isLoggedIn && (isAuthRoute || isOnboardingRoute)) {
+      return '/';
+    }
+
+    return null;
+  },
   routes: [
     // Onboarding
     GoRoute(
@@ -36,24 +79,15 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // Auth
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
-    GoRoute(
-      path: '/signup',
-      builder: (context, state) => const SignupScreen(),
-    ),
+    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+    GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
     GoRoute(
       path: '/forgot-password',
       builder: (context, state) => const ForgotPasswordScreen(),
     ),
 
     // Home / Feed
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const HomeFeedScreen(),
-    ),
+    GoRoute(path: '/', builder: (context, state) => const HomeFeedScreen()),
     GoRoute(
       path: '/feed-view-all',
       builder: (context, state) => const FeedViewAllScreen(),
@@ -75,10 +109,7 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // Search
-    GoRoute(
-      path: '/search',
-      builder: (context, state) => const SearchScreen(),
-    ),
+    GoRoute(path: '/search', builder: (context, state) => const SearchScreen()),
 
     // Top Art of the Day
     GoRoute(

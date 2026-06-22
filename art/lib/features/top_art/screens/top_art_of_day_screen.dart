@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/artwork_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
@@ -20,12 +21,38 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
   List<ArtworkModel> _topArtworks = [];
   bool _isLoading = true;
   bool _isTopOnePortrait = false;
+  RealtimeChannel? _topArtChannel;
 
   @override
   void initState() {
     super.initState();
     _startTimer();
     _loadTopArtworks();
+    _subscribeToTopArtUpdates();
+  }
+
+  void _subscribeToTopArtUpdates() {
+    _topArtChannel = Supabase.instance.client
+        .channel('top-art-live')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'artworks',
+          callback: (_) => _loadTopArtworks(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'likes',
+          callback: (_) => _loadTopArtworks(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'comments',
+          callback: (_) => _loadTopArtworks(showLoading: false),
+        )
+        .subscribe();
   }
 
   void _startTimer() {
@@ -42,11 +69,13 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
     });
   }
 
-  Future<void> _loadTopArtworks() async {
+  Future<void> _loadTopArtworks({bool showLoading = true}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final artworks = await ArtworkRepository().fetchLatestArtworks();
@@ -75,7 +104,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
       }
     } catch (_) {}
 
-    if (mounted) {
+    if (mounted && showLoading) {
       setState(() {
         _isLoading = false;
       });
@@ -85,6 +114,10 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
   @override
   void dispose() {
     _timer.cancel();
+    final channel = _topArtChannel;
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
     super.dispose();
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/artwork_model.dart';
 import '../../../data/models/comment_model.dart';
@@ -19,18 +20,55 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
   List<ArtworkModel> _artworks = [];
   bool _isLoading = true;
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
+  RealtimeChannel? _feedChannel;
 
   @override
   void initState() {
     super.initState();
     _loadFeed();
+    _subscribeToFeedUpdates();
   }
 
-  Future<void> _loadFeed() async {
+  @override
+  void dispose() {
+    final channel = _feedChannel;
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+    super.dispose();
+  }
+
+  void _subscribeToFeedUpdates() {
+    _feedChannel = Supabase.instance.client
+        .channel('feed-view-all-live')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'artworks',
+          callback: (_) => _loadFeed(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'likes',
+          callback: (_) => _loadFeed(showLoading: false),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'comments',
+          callback: (_) => _loadFeed(showLoading: false),
+        )
+        .subscribe();
+  }
+
+  Future<void> _loadFeed({bool showLoading = true}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final artworks = await ArtworkRepository().fetchLatestArtworks();
@@ -41,7 +79,7 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
       }
     } catch (_) {}
 
-    if (mounted) {
+    if (mounted && showLoading) {
       setState(() {
         _isLoading = false;
       });

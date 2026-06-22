@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/artwork_model.dart';
@@ -20,29 +21,25 @@ class _SearchScreenState extends State<SearchScreen> {
   final List<String> _categories = ['All', 'Artists', 'Artwork', 'Tags'];
   int _selectedCategoryIndex = 0;
 
-  final List<String> _trendingSearches = [
-    '#PortraitAI',
-    '#NeonDreams',
-    '#SurrealScapes',
-    '#DigitalPainting',
-    '#AbstractAI',
-  ];
-
   final TextEditingController _searchController = TextEditingController();
   List<ProfileModel> _creators = [];
   List<Map<String, dynamic>> _trendingCreatorsData = [];
+  List<String> _trendingSearches = [];
+  List<ArtworkModel> _trendingArtworks = [];
   List<ProfileModel> _searchResults = [];
   List<ArtworkModel> _artworkSearchResults = [];
   List<ArtworkModel> _tagSearchResults = [];
-  Map<String, bool> _followingMap = {};
+  final Map<String, bool> _followingMap = {};
   bool _isSearching = false;
   bool _isLoading = true;
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
+  RealtimeChannel? _searchChannel;
 
   @override
   void initState() {
     super.initState();
     _loadCreators();
+    _subscribeToSearchUpdates();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -50,24 +47,81 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    final channel = _searchChannel;
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
     super.dispose();
   }
 
-  Future<void> _loadCreators() async {
+  void _subscribeToSearchUpdates() {
+    _searchChannel = Supabase.instance.client
+        .channel('search-live')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'profiles',
+          callback: (_) => _refreshLiveData(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'artworks',
+          callback: (_) => _refreshLiveData(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'likes',
+          callback: (_) => _refreshLiveData(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'comments',
+          callback: (_) => _refreshLiveData(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'follows',
+          callback: (_) => _refreshLiveData(),
+        )
+        .subscribe();
+  }
+
+  Future<void> _refreshLiveData() async {
+    await _loadCreators(showLoading: false);
+    if (_searchController.text.trim().isNotEmpty) {
+      await _onSearchChanged();
+    }
+  }
+
+  Future<void> _loadCreators({bool showLoading = true}) async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
     try {
       final trendingData = await ProfileRepository().getTrendingCreators();
+      final artworkRepository = ArtworkRepository();
+      final trendingSearches = await artworkRepository.fetchTrendingTags();
+      final trendingArtworks = await artworkRepository.fetchTrendingArtworks();
       // Remove self
-      trendingData.removeWhere((item) => (item['profile'] as ProfileModel).id == _currentUserId);
-      
+      trendingData.removeWhere(
+        (item) => (item['profile'] as ProfileModel).id == _currentUserId,
+      );
+
       // Load following status for each creator
       for (final item in trendingData) {
         final creator = item['profile'] as ProfileModel;
         if (_currentUserId.isNotEmpty) {
-          final isFollowing = await SocialRepository().isFollowing(_currentUserId, creator.id);
+          final isFollowing = await SocialRepository().isFollowing(
+            _currentUserId,
+            creator.id,
+          );
           _followingMap[creator.id] = isFollowing;
         }
       }
@@ -75,18 +129,22 @@ class _SearchScreenState extends State<SearchScreen> {
       if (mounted) {
         setState(() {
           _trendingCreatorsData = trendingData;
-          _creators = trendingData.map((item) => item['profile'] as ProfileModel).toList();
+          _creators = trendingData
+              .map((item) => item['profile'] as ProfileModel)
+              .toList();
+          _trendingSearches = trendingSearches;
+          _trendingArtworks = trendingArtworks;
         });
       }
     } catch (_) {}
-    if (mounted) {
+    if (mounted && showLoading) {
       setState(() {
         _isLoading = false;
       });
     }
   }
 
-  void _onSearchChanged() async {
+  Future<void> _onSearchChanged() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
       if (mounted) {
@@ -99,7 +157,7 @@ class _SearchScreenState extends State<SearchScreen> {
       }
       return;
     }
-    
+
     if (mounted) {
       setState(() {
         _isSearching = true;
@@ -132,7 +190,10 @@ class _SearchScreenState extends State<SearchScreen> {
     for (final creator in creatorResults) {
       if (_currentUserId.isNotEmpty && !_followingMap.containsKey(creator.id)) {
         try {
-          final isFollowing = await SocialRepository().isFollowing(_currentUserId, creator.id);
+          final isFollowing = await SocialRepository().isFollowing(
+            _currentUserId,
+            creator.id,
+          );
           _followingMap[creator.id] = isFollowing;
         } catch (_) {}
       }
@@ -150,7 +211,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _toggleFollow(String targetUserId) async {
     if (_currentUserId.isEmpty) return;
     final isFollowing = _followingMap[targetUserId] ?? false;
-    
+
     setState(() {
       _followingMap[targetUserId] = !isFollowing;
     });
@@ -199,11 +260,16 @@ class _SearchScreenState extends State<SearchScreen> {
                 // Avatar with border
                 CircleAvatar(
                   radius: 26,
-                  backgroundImage: creator.avatarUrl != null && creator.avatarUrl!.isNotEmpty
+                  backgroundImage:
+                      creator.avatarUrl != null && creator.avatarUrl!.isNotEmpty
                       ? CachedNetworkImageProvider(creator.avatarUrl!)
                       : null,
                   child: creator.avatarUrl == null || creator.avatarUrl!.isEmpty
-                      ? const Icon(Icons.person, color: AppColors.black, size: 24)
+                      ? const Icon(
+                          Icons.person,
+                          color: AppColors.black,
+                          size: 24,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 16),
@@ -233,7 +299,11 @@ class _SearchScreenState extends State<SearchScreen> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.local_fire_department, color: Colors.orange.shade700, size: 14),
+                            Icon(
+                              Icons.local_fire_department,
+                              color: Colors.orange.shade700,
+                              size: 14,
+                            ),
                             const SizedBox(width: 2),
                             Text(
                               '$likes likes • $followers followers',
@@ -254,9 +324,16 @@ class _SearchScreenState extends State<SearchScreen> {
                 ElevatedButton(
                   onPressed: () => _toggleFollow(creator.id),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isFollowing ? AppColors.creamDark : AppColors.black,
-                    foregroundColor: isFollowing ? AppColors.black : AppColors.creamLight,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    backgroundColor: isFollowing
+                        ? AppColors.creamDark
+                        : AppColors.black,
+                    foregroundColor: isFollowing
+                        ? AppColors.black
+                        : AppColors.creamLight,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
@@ -319,8 +396,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   child: CachedNetworkImage(
                     imageUrl: artwork.imageUrl,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(color: AppColors.creamDark),
-                    errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+                    placeholder: (context, url) =>
+                        Container(color: AppColors.creamDark),
+                    errorWidget: (context, url, error) =>
+                        const Icon(Icons.broken_image),
                   ),
                 ),
                 Padding(
@@ -344,7 +423,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              artwork.authorUsername != null ? '@${artwork.authorUsername}' : 'user',
+                              artwork.authorUsername != null
+                                  ? '@${artwork.authorUsername}'
+                                  : 'user',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -355,7 +436,11 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                           Row(
                             children: [
-                              const Icon(Icons.favorite, color: AppColors.coral, size: 12),
+                              const Icon(
+                                Icons.favorite,
+                                color: AppColors.coral,
+                                size: 12,
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 '${artwork.likesCount}',
@@ -377,6 +462,105 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       },
     );
+  }
+
+  Widget _buildTrendingTags() {
+    if (_trendingSearches.isEmpty) {
+      return const Text(
+        'No trending tags yet',
+        style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _trendingSearches.map((tag) {
+        return GestureDetector(
+          onTap: () {
+            _searchController.text = tag.replaceAll('#', '');
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.creamLight,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.lightGrey, width: 1),
+            ),
+            child: Text(
+              tag,
+              style: const TextStyle(
+                color: AppColors.black,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: AppColors.black,
+      ),
+    );
+  }
+
+  Widget _buildBrowseView() {
+    switch (_selectedCategoryIndex) {
+      case 0: // All
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('Trending Searches'),
+            const SizedBox(height: 12),
+            _buildTrendingTags(),
+            const SizedBox(height: 32),
+            _buildSectionTitle('Trending Artists'),
+            const SizedBox(height: 16),
+            _buildArtistsList(_creators.take(5).toList()),
+            const SizedBox(height: 24),
+            _buildSectionTitle('Trending Artwork'),
+            const SizedBox(height: 16),
+            _buildArtworkGrid(_trendingArtworks.take(6).toList()),
+          ],
+        );
+      case 1: // Artists
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('Trending Artists'),
+            const SizedBox(height: 16),
+            _buildArtistsList(_creators),
+          ],
+        );
+      case 2: // Artwork
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('Trending Artwork'),
+            const SizedBox(height: 16),
+            _buildArtworkGrid(_trendingArtworks),
+          ],
+        );
+      case 3: // Tags
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('Trending Tags'),
+            const SizedBox(height: 12),
+            _buildTrendingTags(),
+          ],
+        );
+      default:
+        return const SizedBox();
+    }
   }
 
   Widget _buildSearchResultsView() {
@@ -423,7 +607,9 @@ class _SearchScreenState extends State<SearchScreen> {
               const SizedBox(height: 12),
               _buildArtworkGrid(_tagSearchResults),
             ],
-            if (_searchResults.isEmpty && _artworkSearchResults.isEmpty && _tagSearchResults.isEmpty)
+            if (_searchResults.isEmpty &&
+                _artworkSearchResults.isEmpty &&
+                _tagSearchResults.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
@@ -499,7 +685,11 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     if (_searchController.text.isNotEmpty)
                       IconButton(
-                        icon: const Icon(Icons.clear, color: AppColors.darkGrey, size: 18),
+                        icon: const Icon(
+                          Icons.clear,
+                          color: AppColors.darkGrey,
+                          size: 18,
+                        ),
                         onPressed: () {
                           _searchController.clear();
                         },
@@ -530,12 +720,19 @@ class _SearchScreenState extends State<SearchScreen> {
                         });
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppColors.black : AppColors.creamLight,
+                          color: isSelected
+                              ? AppColors.black
+                              : AppColors.creamLight,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isSelected ? AppColors.black : AppColors.lightGrey,
+                            color: isSelected
+                                ? AppColors.black
+                                : AppColors.lightGrey,
                             width: 1,
                           ),
                         ),
@@ -543,8 +740,12 @@ class _SearchScreenState extends State<SearchScreen> {
                         child: Text(
                           category,
                           style: TextStyle(
-                            color: isSelected ? AppColors.creamLight : AppColors.black,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected
+                                ? AppColors.creamLight
+                                : AppColors.black,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
                             fontSize: 14,
                           ),
                         ),
@@ -558,68 +759,23 @@ class _SearchScreenState extends State<SearchScreen> {
             // Scrollable Content
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.coral))
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.coral),
+                    )
                   : SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 24,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (!_isSearching) ...[
-                            // Trending Searches Section
-                            const Text(
-                              'Trending Searches',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _trendingSearches.map((tag) {
-                                return GestureDetector(
-                                  onTap: () {
-                                    _searchController.text = tag.replaceAll('#', '');
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.creamLight,
-                                      borderRadius: BorderRadius.circular(24),
-                                      border: Border.all(color: AppColors.lightGrey, width: 1),
-                                    ),
-                                    child: Text(
-                                      tag,
-                                      style: const TextStyle(
-                                        color: AppColors.black,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                            const SizedBox(height: 32),
-                          ],
-
-                          // Section Title
-                          Text(
-                            _isSearching ? 'Search Results' : 'Trending Artists',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.black,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Display either search results or trending creators
-                          _isSearching
-                              ? _buildSearchResultsView()
-                              : _buildArtistsList(_creators),
+                          if (_isSearching) ...[
+                            _buildSectionTitle('Search Results'),
+                            const SizedBox(height: 16),
+                            _buildSearchResultsView(),
+                          ] else
+                            _buildBrowseView(),
                         ],
                       ),
                     ),
@@ -665,7 +821,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.emoji_events_outlined, color: AppColors.black),
+                icon: const Icon(
+                  Icons.emoji_events_outlined,
+                  color: AppColors.black,
+                ),
                 onPressed: () => context.push('/top-art'),
               ),
               IconButton(
