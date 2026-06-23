@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'preferences_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -190,6 +191,8 @@ class PushNotificationService {
   }
 
   Future<void> _showNotification(Map<String, dynamic> record) async {
+    if (!PreferencesService().notificationsEnabled) return;
+
     // Only show if the user isn't the one who triggered it
     final actorId = record['actor_id'] as String?;
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;

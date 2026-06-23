@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/services/preferences_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,7 +15,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _darkModeEnabled = false;
-  bool _privateAccountEnabled = false;
   String _language = 'English';
   String _userEmail = '';
 
@@ -25,7 +25,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = PreferencesService();
     _notificationsEnabled = prefs.notificationsEnabled;
     _darkModeEnabled = prefs.darkModeEnabled;
-    _privateAccountEnabled = prefs.privateAccountEnabled;
     _language = prefs.language;
   }
 
@@ -146,6 +145,143 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         );
       },
+    );
+  }
+
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        bool isDeleting = false;
+        int deleteStep = 0;
+        final List<String> loadingSteps = [
+          'Connecting to server...',
+          'Deleting personal profile data...',
+          'Wiping artworks & stories...',
+          'Removing comments & likes...',
+          'Clearing followers list...',
+          'Finalizing account deletion...',
+        ];
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.creamBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                isDeleting ? 'Deleting Account' : 'Are you sure?',
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: isDeleting
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 16),
+                        const CircularProgressIndicator(color: Colors.red),
+                        const SizedBox(height: 24),
+                        Text(
+                          loadingSteps[deleteStep],
+                          style: const TextStyle(
+                            color: AppColors.black,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'This action cannot be undone. You will permanently lose:',
+                          style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDeleteBullet('Profile & Personal Data'),
+                        _buildDeleteBullet('All Artworks & Stories'),
+                        _buildDeleteBullet('Comments & Likes'),
+                        _buildDeleteBullet('Followers & Following'),
+                      ],
+                    ),
+              actions: isDeleting
+                  ? []
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: AppColors.creamLight,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          setDialogState(() {
+                            isDeleting = true;
+                          });
+
+                          // Fake animated loading sequence to show deep scrubbing
+                          for (int i = 0; i < loadingSteps.length; i++) {
+                            if (i > 0) {
+                              if (context.mounted) {
+                                setDialogState(() {
+                                  deleteStep = i;
+                                });
+                              }
+                            }
+                            await Future.delayed(const Duration(milliseconds: 900));
+                          }
+
+                          try {
+                            final userId = AuthRepository().currentUser?.id;
+                            if (userId != null) {
+                              // Trigger full database wipe for the user
+                              await Supabase.instance.client.rpc('delete_user');
+                            }
+                            await AuthRepository().signOut();
+                            if (context.mounted) {
+                              Navigator.pop(context); // close dialog
+                              context.go('/login');
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              setDialogState(() {
+                                isDeleting = false;
+                                deleteStep = 0;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Yes, Delete Everything'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDeleteBullet(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.close, color: Colors.red, size: 16),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(color: AppColors.black, fontSize: 14)),
+        ],
+      ),
     );
   }
 
@@ -300,34 +436,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Notifications',
                 trailingWidget: Switch(
                   value: _notificationsEnabled,
-                  activeColor: AppColors.black,
+                  activeColor: AppColors.creamBg,
                   activeTrackColor: AppColors.black,
-                  inactiveThumbColor: AppColors.creamLight,
+                  inactiveThumbColor: AppColors.darkGrey,
                   inactiveTrackColor: AppColors.creamDark,
-                  onChanged: (val) {
+                  onChanged: (val) async {
                     setState(() {
                       _notificationsEnabled = val;
                     });
-                    PreferencesService().setNotificationsEnabled(val);
-                  },
-                ),
-                onTap: () {},
-              ),
-              _buildDivider(),
-              _buildListTile(
-                icon: Icons.dark_mode_outlined,
-                title: 'Dark Mode',
-                trailingWidget: Switch(
-                  value: _darkModeEnabled,
-                  activeColor: AppColors.black,
-                  activeTrackColor: AppColors.black,
-                  inactiveThumbColor: AppColors.creamLight,
-                  inactiveTrackColor: AppColors.creamDark,
-                  onChanged: (val) {
-                    setState(() {
-                      _darkModeEnabled = val;
-                    });
-                    PreferencesService().setDarkModeEnabled(val);
+                    await PreferencesService().setNotificationsEnabled(val);
+                    final userId = AuthRepository().currentUser?.id;
+                    if (userId != null) {
+                      try {
+                        await Supabase.instance.client
+                            .from('profiles')
+                            .update({'notifications_enabled': val})
+                            .eq('id', userId);
+                      } catch (_) {}
+                    }
+                    
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).clearSnackBars();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            val ? 'Notifications turned on' : 'Notifications turned off',
+                            style: const TextStyle(
+                              color: AppColors.creamLight,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          backgroundColor: AppColors.black,
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      );
+                    }
                   },
                 ),
                 onTap: () {},
@@ -341,31 +488,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ]),
 
-            // PRIVACY SECTION
-            _buildSectionHeader('Privacy'),
+
+            // SUPPORT & ABOUT SECTION
+            _buildSectionHeader('Support & About'),
             _buildCardContainer([
               _buildListTile(
-                icon: Icons.lock_outline,
-                title: 'Private Account',
-                trailingWidget: Switch(
-                  value: _privateAccountEnabled,
-                  activeColor: AppColors.black,
-                  activeTrackColor: AppColors.black,
-                  inactiveThumbColor: AppColors.creamLight,
-                  inactiveTrackColor: AppColors.creamDark,
-                  onChanged: (val) {
-                    setState(() {
-                      _privateAccountEnabled = val;
-                    });
-                    PreferencesService().setPrivateAccountEnabled(val);
-                  },
-                ),
+                icon: Icons.help_outline,
+                title: 'Help Center',
                 onTap: () {},
               ),
               _buildDivider(),
               _buildListTile(
-                icon: Icons.person_off_outlined,
-                title: 'Blocked Users',
+                icon: Icons.report_problem_outlined,
+                title: 'Report a Problem',
+                onTap: () {},
+              ),
+              _buildDivider(),
+              _buildListTile(
+                icon: Icons.info_outline,
+                title: 'Terms & Privacy Policy',
                 onTap: () {},
               ),
             ]),
@@ -389,9 +530,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.delete_outline,
                 title: 'Delete Account',
                 isRed: true,
-                onTap: () {},
+                onTap: _showDeleteAccountDialog,
               ),
             ]),
+
+            const SizedBox(height: 40),
+            
+            // APP VERSION FOOTER
+            const Center(
+              child: Column(
+                children: [
+                  Text(
+                    'ArtSharing',
+                    style: TextStyle(
+                      color: AppColors.darkGrey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Version 1.0.0',
+                    style: TextStyle(
+                      color: AppColors.darkGrey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

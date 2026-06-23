@@ -10,6 +10,8 @@ import '../../../data/models/comment_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/story_repository.dart';
+import '../../../core/widgets/custom_add_button.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 
 class FeedViewAllScreen extends StatefulWidget {
   const FeedViewAllScreen({super.key});
@@ -159,51 +161,7 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
                 ),
               ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.creamLight,
-          border: const Border(
-            top: BorderSide(color: AppColors.lightGrey, width: 1),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.home, color: AppColors.coral),
-                onPressed: () => context.go('/'),
-              ),
-              IconButton(
-                icon: const Icon(Icons.search, color: AppColors.darkGrey),
-                onPressed: () => context.go('/search'),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.add_box_outlined,
-                  color: AppColors.darkGrey,
-                ),
-                onPressed: () => context.push('/upload'),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.emoji_events_outlined,
-                  color: AppColors.darkGrey,
-                ),
-                onPressed: () => context.go('/top-art'),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.person_outline,
-                  color: AppColors.darkGrey,
-                ),
-                onPressed: () => context.go('/profile'),
-              ),
-            ],
-          ),
-        ),
-      ),
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
   }
 }

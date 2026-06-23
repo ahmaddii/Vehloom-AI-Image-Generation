@@ -9,6 +9,8 @@ import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../core/widgets/custom_add_button.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -530,71 +532,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
 
       // Bottom Navigation Bar
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.creamLight,
-          border: const Border(
-            top: BorderSide(color: AppColors.lightGrey, width: 1),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.home_outlined,
-                  color: _isMe ? AppColors.black : AppColors.black,
-                ),
-                onPressed: () => context.go('/'),
-              ),
-              IconButton(
-                icon: const Icon(Icons.search_outlined, color: AppColors.black),
-                onPressed: () => context.push('/search'),
-              ),
-
-              // Center FAB Button
-              GestureDetector(
-                onTap: () => context.push('/upload'),
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: AppColors.black,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.add,
-                    color: AppColors.creamLight,
-                    size: 24,
-                  ),
-                ),
-              ),
-
-              IconButton(
-                icon: const Icon(
-                  Icons.emoji_events_outlined,
-                  color: AppColors.black,
-                ),
-                onPressed: () => context.push('/top-art'),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.person,
-                  color: _isMe ? AppColors.coral : AppColors.black,
-                ),
-                onPressed: () {
-                  if (!_isMe) {
-                    context.go('/profile');
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
     );
   }
 }

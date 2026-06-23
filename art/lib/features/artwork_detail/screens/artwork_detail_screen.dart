@@ -462,25 +462,28 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 ),
                               );
                             },
-                            child: CachedNetworkImage(
-                              imageUrl: _artwork!.imageUrl,
-                              fit: BoxFit.fitWidth,
-                              placeholder: (context, url) => Container(
-                                height: 300,
-                                color: AppColors.creamDark,
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    color: AppColors.coral,
+                            child: Hero(
+                              tag: 'artwork-${_artwork!.id}',
+                              child: CachedNetworkImage(
+                                imageUrl: _artwork!.imageUrl,
+                                fit: BoxFit.fitWidth,
+                                placeholder: (context, url) => Container(
+                                  height: 300,
+                                  color: AppColors.creamDark,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      color: AppColors.coral,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                height: 300,
-                                color: AppColors.creamDark,
-                                child: const Icon(
-                                  Icons.broken_image,
-                                  size: 48,
-                                  color: AppColors.darkGrey,
+                                errorWidget: (context, url, error) => Container(
+                                  height: 300,
+                                  color: AppColors.creamDark,
+                                  child: const Icon(
+                                    Icons.broken_image,
+                                    size: 48,
+                                    color: AppColors.darkGrey,
+                                  ),
                                 ),
                               ),
                             ),

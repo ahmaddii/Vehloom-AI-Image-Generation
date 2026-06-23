@@ -41,7 +41,7 @@ class _SignupScreenState extends State<SignupScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
-                
+
                 // Logo
                 Align(
                   alignment: Alignment.centerLeft,
@@ -63,9 +63,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 28),
-                
+
                 // Header
                 const Text(
                   'Create Your Account',
@@ -83,15 +83,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     color: AppColors.black.withOpacity(0.6),
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Username Field
                 TextFormField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(
-                    hintText: 'Username',
-                  ),
+                  decoration: const InputDecoration(hintText: 'Username'),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Username is required';
@@ -100,14 +98,12 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Email Field
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    hintText: 'Email address',
-                  ),
+                  decoration: const InputDecoration(hintText: 'Email address'),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Email is required';
@@ -119,14 +115,12 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Password Field
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Password',
-                  ),
+                  decoration: const InputDecoration(hintText: 'Password'),
                   validator: (value) {
                     if (value == null || value.length < 6) {
                       return 'Password must be at least 6 characters';
@@ -135,7 +129,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Confirm Password Field
                 TextFormField(
                   controller: _confirmPasswordController,
@@ -150,9 +144,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Terms and Conditions Checkbox
                 Row(
                   children: [
@@ -188,15 +182,20 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Sign Up Button
                 _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: AppColors.coral))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.coral,
+                        ),
+                      )
                     : ElevatedButton(
                         onPressed: () async {
-                          if (_formKey.currentState!.validate() && _agreeToTerms) {
+                          if (_formKey.currentState!.validate() &&
+                              _agreeToTerms) {
                             setState(() {
                               _isLoading = true;
                             });
@@ -212,7 +211,11 @@ class _SignupScreenState extends State<SignupScreen> {
                             } catch (e) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Sign up failed: ${e.toString()}')),
+                                  SnackBar(
+                                    content: Text(
+                                      'Sign up failed: ${e.toString()}',
+                                    ),
+                                  ),
                                 );
                               }
                             } finally {
@@ -224,19 +227,25 @@ class _SignupScreenState extends State<SignupScreen> {
                             }
                           } else if (!_agreeToTerms) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please agree to the Terms & Privacy Policy')),
+                              const SnackBar(
+                                content: Text(
+                                  'Please agree to the Terms & Privacy Policy',
+                                ),
+                              ),
                             );
                           }
                         },
                         child: const Text('Sign Up'),
                       ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Divider
                 Row(
                   children: [
-                    Expanded(child: Divider(color: AppColors.black.withOpacity(0.1))),
+                    Expanded(
+                      child: Divider(color: AppColors.black.withOpacity(0.1)),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
@@ -247,12 +256,14 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       ),
                     ),
-                    Expanded(child: Divider(color: AppColors.black.withOpacity(0.1))),
+                    Expanded(
+                      child: Divider(color: AppColors.black.withOpacity(0.1)),
+                    ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Google Button
                 OutlinedButton(
                   onPressed: () {},
@@ -267,7 +278,11 @@ class _SignupScreenState extends State<SignupScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.g_mobiledata, color: AppColors.black, size: 28),
+                      Icon(
+                        Icons.g_mobiledata,
+                        color: AppColors.black,
+                        size: 28,
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'Continue with Google',
@@ -280,9 +295,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 12),
-                
+
                 // Apple Button
                 OutlinedButton(
                   onPressed: () {},
@@ -310,9 +325,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Footer
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

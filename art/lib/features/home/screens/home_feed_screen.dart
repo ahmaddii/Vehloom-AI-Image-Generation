@@ -12,6 +12,8 @@ import '../../../data/repositories/notification_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../core/widgets/custom_add_button.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../data/models/story_model.dart';
 import '../../../data/repositories/story_repository.dart';
 import 'package:image_picker/image_picker.dart';
@@ -45,6 +47,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   int _unreadNotificationsCount = 0;
   RealtimeChannel? _notificationsChannel;
   RealtimeChannel? _feedChannel;
+  bool _hasNewPosts = false;
 
   @override
   void initState() {
@@ -125,7 +128,17 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'artworks',
-          callback: (_) => _loadData(showLoading: false),
+          callback: (payload) {
+            if (payload.eventType == PostgresChangeEvent.insert) {
+              if (mounted) {
+                setState(() {
+                  _hasNewPosts = true;
+                });
+              }
+            } else {
+              _loadData(showLoading: false);
+            }
+          },
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
@@ -165,6 +178,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     if (showLoading) {
       setState(() {
         _isLoading = true;
+        _hasNewPosts = false;
       });
     }
     try {
@@ -645,228 +659,259 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
 
               // Masonry Art Grid
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _isLoading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.coral,
-                          ),
-                        )
-                      : _filteredArtworks.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No artworks found',
-                            style: TextStyle(
-                              color: AppColors.black,
-                              fontWeight: FontWeight.bold,
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: AppColors.coral,
+                              ),
+                            )
+                          : _filteredArtworks.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No artworks found',
+                                style: TextStyle(
+                                  color: AppColors.black,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _loadData,
+                              color: AppColors.coral,
+                              child: MasonryGridView.count(
+                                crossAxisCount: 2,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                                itemCount: _filteredArtworks.length,
+                                itemBuilder: (context, index) {
+                                  final artwork = _filteredArtworks[index];
+                                  final aspectRatio = _getAspectRatioForIndex(
+                                    index,
+                                  );
+                                  return _DoubleTapLikeWrapper(
+                                    onDoubleTap: () async {
+                                      final currentUserId =
+                                          AuthRepository().currentUser?.id;
+                                      if (currentUserId != null) {
+                                        // Trigger like in background
+                                        try {
+                                          await ArtworkRepository().toggleLike(
+                                            artwork.id,
+                                            currentUserId,
+                                          );
+                                          _loadData(showLoading: false);
+                                        } catch (_) {}
+                                      }
+                                    },
+                                    onTap: () =>
+                                        context.push('/artwork/${artwork.id}'),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Stack(
+                                        children: [
+                                          Hero(
+                                            tag: 'artwork-${artwork.id}',
+                                            child: CachedNetworkImage(
+                                              imageUrl: artwork.imageUrl,
+                                              fit: BoxFit.cover,
+                                              placeholder: (context, url) =>
+                                                  AspectRatio(
+                                                    aspectRatio: aspectRatio,
+                                                    child: Container(
+                                                      color:
+                                                          AppColors.creamDark,
+                                                    ),
+                                                  ),
+                                              errorWidget:
+                                                  (
+                                                    context,
+                                                    url,
+                                                    error,
+                                                  ) => AspectRatio(
+                                                    aspectRatio: aspectRatio,
+                                                    child: Container(
+                                                      color:
+                                                          AppColors.creamDark,
+                                                      child: const Icon(
+                                                        Icons.broken_image,
+                                                        color:
+                                                            AppColors.darkGrey,
+                                                      ),
+                                                    ),
+                                                  ),
+                                            ),
+                                          ),
+
+                                          // Likes Badge on top-right
+                                          Positioned(
+                                            top: 12,
+                                            right: 12,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.black
+                                                    .withOpacity(0.4),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.favorite,
+                                                    color: AppColors.coral,
+                                                    size: 12,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '${artwork.likesCount}',
+                                                    style: const TextStyle(
+                                                      color:
+                                                          AppColors.creamLight,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+
+                                          // Author avatar / handle on bottom-left if present
+                                          if (artwork.authorUsername != null)
+                                            Positioned(
+                                              bottom: 12,
+                                              left: 12,
+                                              child: Row(
+                                                children: [
+                                                  CircleAvatar(
+                                                    radius: 10,
+                                                    backgroundImage:
+                                                        artwork.authorAvatarUrl !=
+                                                                null &&
+                                                            artwork
+                                                                .authorAvatarUrl!
+                                                                .isNotEmpty
+                                                        ? CachedNetworkImageProvider(
+                                                            artwork
+                                                                .authorAvatarUrl!,
+                                                          )
+                                                        : null,
+                                                    child:
+                                                        artwork.authorAvatarUrl ==
+                                                                null ||
+                                                            artwork
+                                                                .authorAvatarUrl!
+                                                                .isEmpty
+                                                        ? const Icon(
+                                                            Icons.person,
+                                                            size: 8,
+                                                            color:
+                                                                AppColors.black,
+                                                          )
+                                                        : null,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    artwork.userId ==
+                                                            AuthRepository()
+                                                                .currentUser
+                                                                ?.id
+                                                        ? '@${artwork.authorUsername} (You)'
+                                                        : '@${artwork.authorUsername}',
+                                                    style: const TextStyle(
+                                                      color:
+                                                          AppColors.creamLight,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      shadows: [
+                                                        Shadow(
+                                                          blurRadius: 4.0,
+                                                          color: Colors.black,
+                                                          offset: Offset(0, 1),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                    // Live Feed Updates Pill
+                    if (_hasNewPosts)
+                      Positioned(
+                        top: 16,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: () {
+                              _loadData(showLoading: true);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.coral,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.coral.withOpacity(0.4),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.arrow_upward,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'New Posts Available',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        )
-                      : RefreshIndicator(
-                          onRefresh: _loadData,
-                          color: AppColors.coral,
-                          child: MasonryGridView.count(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            itemCount: _filteredArtworks.length,
-                            itemBuilder: (context, index) {
-                              final artwork = _filteredArtworks[index];
-                              final aspectRatio = _getAspectRatioForIndex(
-                                index,
-                              );
-                              return GestureDetector(
-                                onTap: () =>
-                                    context.push('/artwork/${artwork.id}'),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: Stack(
-                                    children: [
-                                      CachedNetworkImage(
-                                        imageUrl: artwork.imageUrl,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) =>
-                                            AspectRatio(
-                                              aspectRatio: aspectRatio,
-                                              child: Container(
-                                                color: AppColors.creamDark,
-                                              ),
-                                            ),
-                                        errorWidget: (context, url, error) =>
-                                            AspectRatio(
-                                              aspectRatio: aspectRatio,
-                                              child: Container(
-                                                color: AppColors.creamDark,
-                                                child: const Icon(
-                                                  Icons.broken_image,
-                                                  color: AppColors.darkGrey,
-                                                ),
-                                              ),
-                                            ),
-                                      ),
-
-                                      // Likes Badge on top-right
-                                      Positioned(
-                                        top: 12,
-                                        right: 12,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.black.withOpacity(
-                                              0.4,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.favorite,
-                                                color: AppColors.coral,
-                                                size: 12,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${artwork.likesCount}',
-                                                style: const TextStyle(
-                                                  color: AppColors.creamLight,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-
-                                      // Author avatar / handle on bottom-left if present
-                                      if (artwork.authorUsername != null)
-                                        Positioned(
-                                          bottom: 12,
-                                          left: 12,
-                                          child: Row(
-                                            children: [
-                                              CircleAvatar(
-                                                radius: 10,
-                                                backgroundImage:
-                                                    artwork.authorAvatarUrl !=
-                                                            null &&
-                                                        artwork
-                                                            .authorAvatarUrl!
-                                                            .isNotEmpty
-                                                    ? CachedNetworkImageProvider(
-                                                        artwork
-                                                            .authorAvatarUrl!,
-                                                      )
-                                                    : null,
-                                                child:
-                                                    artwork.authorAvatarUrl ==
-                                                            null ||
-                                                        artwork
-                                                            .authorAvatarUrl!
-                                                            .isEmpty
-                                                    ? const Icon(
-                                                        Icons.person,
-                                                        size: 8,
-                                                        color: AppColors.black,
-                                                      )
-                                                    : null,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                artwork.userId ==
-                                                        AuthRepository()
-                                                            .currentUser
-                                                            ?.id
-                                                    ? '@${artwork.authorUsername} (You)'
-                                                    : '@${artwork.authorUsername}',
-                                                style: const TextStyle(
-                                                  color: AppColors.creamLight,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  shadows: [
-                                                    Shadow(
-                                                      blurRadius: 4.0,
-                                                      color: Colors.black,
-                                                      offset: Offset(0, 1),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
                         ),
+                      ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.creamLight,
-          border: const Border(
-            top: BorderSide(color: AppColors.lightGrey, width: 1),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.home, color: AppColors.coral),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: const Icon(Icons.search_outlined, color: AppColors.black),
-                onPressed: () => context.push('/search'),
-              ),
-              GestureDetector(
-                onTap: () => context.push('/upload'),
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: AppColors.black,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.add,
-                    color: AppColors.creamLight,
-                    size: 24,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.emoji_events_outlined,
-                  color: AppColors.black,
-                ),
-                onPressed: () => context.push('/top-art'),
-              ),
-              IconButton(
-                icon: const Icon(Icons.person_outline, color: AppColors.black),
-                onPressed: () => context.go('/profile'),
-              ),
-            ],
-          ),
-        ),
-      ),
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
   }
 
@@ -1113,5 +1158,96 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
         _loadData(); // Reload stories
       }
     }
+  }
+}
+
+class _DoubleTapLikeWrapper extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onDoubleTap;
+  final VoidCallback onTap;
+
+  const _DoubleTapLikeWrapper({
+    required this.child,
+    required this.onDoubleTap,
+    required this.onTap,
+  });
+
+  @override
+  State<_DoubleTapLikeWrapper> createState() => _DoubleTapLikeWrapperState();
+}
+
+class _DoubleTapLikeWrapperState extends State<_DoubleTapLikeWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _isAnimating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.2), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleDoubleTap() {
+    widget.onDoubleTap();
+    setState(() {
+      _isAnimating = true;
+    });
+    _controller.forward().then((_) {
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          _controller.reverse().then((_) {
+            if (mounted) {
+              setState(() {
+                _isAnimating = false;
+              });
+            }
+          });
+        }
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onDoubleTap: _handleDoubleTap,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          widget.child,
+          if (_isAnimating)
+            ScaleTransition(
+              scale: _scaleAnimation,
+              child: const Icon(
+                Icons.favorite,
+                color: Colors.white,
+                size: 80,
+                shadows: [
+                  Shadow(
+                    color: Colors.black26,
+                    blurRadius: 15,
+                    offset: Offset(0, 5),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
