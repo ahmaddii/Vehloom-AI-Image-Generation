@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -8,6 +9,7 @@ import '../../../data/models/artwork_model.dart';
 import '../../../data/models/comment_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/story_repository.dart';
 
 class FeedViewAllScreen extends StatefulWidget {
   const FeedViewAllScreen({super.key});
@@ -331,12 +333,13 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
   }
 
   void _showQuickActionsBottomSheet() {
+    final messenger = ScaffoldMessenger.of(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) {
+      builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (builderContext, setModalState) {
             return Container(
               decoration: const BoxDecoration(
                 color: AppColors.creamBg,
@@ -442,6 +445,32 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                           setState(() {});
                         },
                       ),
+                      // Share Story Action
+                      _buildQuickActionItem(
+                        icon: Icons.share_outlined,
+                        iconColor: AppColors.black,
+                        label: 'Share Story',
+                        onTap: () async {
+                          Navigator.pop(builderContext);
+                          final currentUserId =
+                              AuthRepository().currentUser?.id;
+                          if (currentUserId == null) {
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Please log in first.'),
+                              ),
+                            );
+                            return;
+                          }
+                          _performStoryUpload(context, messenger, () async {
+                            await StoryRepository().createStory(
+                              userId: currentUserId,
+                              artworkId: widget.artwork.id,
+                              mediaUrl: widget.artwork.imageUrl,
+                            );
+                          });
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -460,37 +489,182 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: AppColors.creamLight,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.lightGrey, width: 1),
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.creamLight,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.lightGrey, width: 1),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
               ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.black,
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.black,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _performStoryUpload(
+    BuildContext context,
+    ScaffoldMessengerState messenger,
+    Future<void> Function() uploadCallback,
+  ) async {
+    final progressNotifier = ValueNotifier<double>(0.0);
+    bool uploadFinished = false;
+    Object? uploadError;
+
+    // Start upload task in background
+    final uploadFuture = uploadCallback().then((_) {
+      uploadFinished = true;
+    }).catchError((err) {
+      uploadFinished = true;
+      uploadError = err;
+    });
+
+    // Start a timer to animate progress smoothly
+    final timer = Timer.periodic(const Duration(milliseconds: 50), (t) {
+      if (uploadError != null) {
+        t.cancel();
+        return;
+      }
+
+      if (progressNotifier.value < 0.95) {
+        progressNotifier.value += 0.03;
+      } else if (uploadFinished) {
+        progressNotifier.value = 1.0;
+        t.cancel();
+      }
+    });
+
+    // Show the dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Center(
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.symmetric(
+                vertical: 28,
+                horizontal: 20,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.creamBg,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: ValueListenableBuilder<double>(
+                valueListenable: progressNotifier,
+                builder: (context, progress, child) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 70,
+                            height: 70,
+                            child: CircularProgressIndicator(
+                              value: progress,
+                              strokeWidth: 4,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                AppColors.coral,
+                              ),
+                              backgroundColor: AppColors.lightGrey,
+                            ),
+                          ),
+                          Text(
+                            '${(progress * 100).toInt()}%',
+                            style: const TextStyle(
+                              color: AppColors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Sharing to Story...',
+                        style: TextStyle(
+                          color: AppColors.black,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    // Wait for the upload task
+    try {
+      await uploadFuture;
+    } catch (_) {}
+
+    // Ensure animation reaches 100% if successful
+    if (uploadError == null) {
+      uploadFinished = true;
+      while (progressNotifier.value < 1.0) {
+        await Future.delayed(const Duration(milliseconds: 30));
+      }
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    timer.cancel();
+    progressNotifier.dispose();
+
+    if (context.mounted) {
+      Navigator.pop(context); // Dismiss dialog
+    }
+
+    if (uploadError != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to share: $uploadError')),
+      );
+    } else {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Shared to your Story!')),
+      );
+    }
   }
 
   @override

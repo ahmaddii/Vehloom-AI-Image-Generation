@@ -46,6 +46,9 @@ dependencies:
   flutter_image_compress: ^2.4.0
   image_cropper: ^12.2.1
   shared_preferences: ^2.5.5
+  flutter_local_notifications: ^20.1.0
+  firebase_core: ^4.11.0
+  firebase_messaging: ^16.4.0
 
 dev_dependencies:
   flutter_test:

@@ -44,7 +44,7 @@ class NotificationModel {
       commentId: json['comment_id'] as String?,
       commentContent: json['comment_content'] as String?,
       isRead: json['is_read'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
       actorUsername: actor?['username'] as String?,
       actorDisplayName: actor?['display_name'] as String?,
       actorAvatarUrl: actor?['avatar_url'] as String?,

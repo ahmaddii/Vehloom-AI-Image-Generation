@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,14 @@ import '../../../data/repositories/notification_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/models/story_model.dart';
+import '../../../data/repositories/story_repository.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+// Global RouteObserver instance – register this in MaterialApp/GoRouter
+final RouteObserver<ModalRoute<void>> homeRouteObserver =
+    RouteObserver<ModalRoute<void>>();
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -19,7 +28,7 @@ class HomeFeedScreen extends StatefulWidget {
   State<HomeFeedScreen> createState() => _HomeFeedScreenState();
 }
 
-class _HomeFeedScreenState extends State<HomeFeedScreen> {
+class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   final List<String> _categories = [
     'For You',
     'Following',
@@ -30,6 +39,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   ProfileModel? _myProfile;
   List<ProfileModel> _creators = [];
+  List<StoryModel> _activeStories = [];
   List<ArtworkModel> _masonryArtworks = [];
   bool _isLoading = true;
   int _unreadNotificationsCount = 0;
@@ -46,7 +56,24 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(this.context);
+    if (route != null) {
+      homeRouteObserver.subscribe(this, route);
+    }
+  }
+
+  /// Called by RouteAware when the user pops back to this screen.
+  @override
+  void didPopNext() {
+    // Silently refresh stories & feed when returning from any pushed route
+    _loadData(showLoading: false);
+  }
+
+  @override
   void dispose() {
+    homeRouteObserver.unsubscribe(this);
     final channel = _notificationsChannel;
     if (channel != null) {
       Supabase.instance.client.removeChannel(channel);
@@ -124,6 +151,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           table: 'profiles',
           callback: (_) => _loadData(showLoading: false),
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'stories',
+          callback: (_) => _loadData(showLoading: false),
+        )
         .subscribe();
   }
 
@@ -139,9 +172,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       final currentUserId = AuthRepository().currentUser?.id;
       List<ProfileModel> creators = [];
       ProfileModel? myProfile;
+      List<StoryModel> activeStories = [];
       if (currentUserId != null) {
         // Fetch current user's profile
         myProfile = await ProfileRepository().getProfile(currentUserId);
+
+        // Fetch active stories
+        activeStories = await StoryRepository().fetchActiveStories();
 
         // Fallback to Auth metadata if profiles table record is missing/delayed
         if (myProfile == null) {
@@ -174,6 +211,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
           _myProfile = myProfile;
           _masonryArtworks = artworks;
           _creators = creators;
+          _activeStories = activeStories;
         });
       }
     } catch (e) {
@@ -369,7 +407,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
               // Horizontal active creators scroll
               SizedBox(
-                height: 100,
+                height: 90,
                 child: _creators.isEmpty
                     ? const Center(
                         child: Text(
@@ -388,47 +426,110 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                           final creator = _creators[index];
                           final isMe =
                               creator.id == AuthRepository().currentUser?.id;
+                          final creatorStories = _activeStories
+                              .where((story) => story.userId == creator.id)
+                              .toList();
+                          final hasStories = creatorStories.isNotEmpty;
+
                           return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
                             child: GestureDetector(
                               onTap: () {
-                                if (isMe) {
-                                  context.go('/profile');
+                                if (hasStories) {
+                                  context.push(
+                                    '/story/${creator.id}',
+                                    extra: {'stories': _activeStories},
+                                  );
                                 } else {
-                                  context.push('/profile/${creator.id}');
+                                  if (isMe) {
+                                    _showMyStoryOptions();
+                                  } else {
+                                    context.push('/profile/${creator.id}');
+                                  }
                                 }
                               },
                               child: Column(
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: isMe
-                                            ? AppColors.black
-                                            : AppColors.coral,
-                                        width: 2,
+                                  Stack(
+                                    children: [
+                                      Container(
+                                        width: 66,
+                                        height: 66,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: hasStories
+                                              ? const SweepGradient(
+                                                  colors: [
+                                                    AppColors.coral,
+                                                    Color(0xFFFF007F),
+                                                    Color(0xFFFF7F00),
+                                                    AppColors.coral,
+                                                  ],
+                                                )
+                                              : null,
+                                        ),
+                                        padding: EdgeInsets.all(
+                                          hasStories ? 3.5 : 0,
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: hasStories
+                                                ? AppColors.creamBg
+                                                : Colors.transparent,
+                                          ),
+                                          padding: EdgeInsets.all(
+                                            hasStories ? 2.5 : 0,
+                                          ),
+                                          child: CircleAvatar(
+                                            radius: 26,
+                                            backgroundImage:
+                                                creator.avatarUrl != null &&
+                                                    creator
+                                                        .avatarUrl!
+                                                        .isNotEmpty
+                                                ? CachedNetworkImageProvider(
+                                                    creator.avatarUrl!,
+                                                  )
+                                                : null,
+                                            child:
+                                                creator.avatarUrl == null ||
+                                                    creator.avatarUrl!.isEmpty
+                                                ? const Icon(
+                                                    Icons.person,
+                                                    color: AppColors.black,
+                                                  )
+                                                : null,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 26,
-                                      backgroundImage:
-                                          creator.avatarUrl != null &&
-                                              creator.avatarUrl!.isNotEmpty
-                                          ? CachedNetworkImageProvider(
-                                              creator.avatarUrl!,
-                                            )
-                                          : null,
-                                      child:
-                                          creator.avatarUrl == null ||
-                                              creator.avatarUrl!.isEmpty
-                                          ? const Icon(
-                                              Icons.person,
-                                              color: AppColors.black,
-                                            )
-                                          : null,
-                                    ),
+                                      if (isMe)
+                                        Positioned(
+                                          bottom: 0,
+                                          right: 0,
+                                          child: GestureDetector(
+                                            onTap: () => _showMyStoryOptions(),
+                                            behavior: HitTestBehavior.opaque,
+                                            child: Container(
+                                              width: 22,
+                                              height: 22,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.coral,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: AppColors.creamBg,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.add,
+                                                size: 12,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
@@ -452,7 +553,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                       ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
               // Categories Section Title
               Padding(
@@ -767,5 +868,250 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         ),
       ),
     );
+  }
+
+  void _showMyStoryOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.creamBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightGrey,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Your Story',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ListTile(
+                leading: const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: AppColors.coral,
+                ),
+                title: const Text(
+                  'Post a Photo Story',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadStoryFromGallery();
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(
+                  Icons.person_outline,
+                  color: AppColors.black,
+                ),
+                title: const Text(
+                  'View Profile',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.go('/profile');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _uploadStoryFromGallery() async {
+    final currentUserId = AuthRepository().currentUser?.id;
+    if (currentUserId == null) return;
+
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1920,
+      maxHeight: 1080,
+      imageQuality: 85,
+    );
+
+    if (pickedFile != null) {
+      final file = File(pickedFile.path);
+
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final progressNotifier = ValueNotifier<double>(0.0);
+      bool uploadFinished = false;
+      Object? uploadError;
+
+      // Start upload task in background
+      final uploadFuture =
+          (() async {
+                final mediaUrl = await StoryRepository().uploadStoryImage(
+                  file,
+                  currentUserId,
+                );
+                await StoryRepository().createStory(
+                  userId: currentUserId,
+                  mediaUrl: mediaUrl,
+                );
+              })()
+              .then((_) {
+                uploadFinished = true;
+              })
+              .catchError((err) {
+                uploadFinished = true;
+                uploadError = err;
+              });
+
+      // Start a timer to animate progress smoothly
+      final timer = Timer.periodic(const Duration(milliseconds: 50), (t) {
+        if (uploadError != null) {
+          t.cancel();
+          return;
+        }
+
+        if (progressNotifier.value < 0.95) {
+          progressNotifier.value += 0.03;
+        } else if (uploadFinished) {
+          progressNotifier.value = 1.0;
+          t.cancel();
+        }
+      });
+
+      // Show the dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Center(
+              child: Container(
+                width: 220,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 28,
+                  horizontal: 20,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.creamBg,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ValueListenableBuilder<double>(
+                  valueListenable: progressNotifier,
+                  builder: (context, progress, child) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 70,
+                              height: 70,
+                              child: CircularProgressIndicator(
+                                value: progress,
+                                strokeWidth: 4,
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppColors.coral,
+                                ),
+                                backgroundColor: AppColors.lightGrey,
+                              ),
+                            ),
+                            Text(
+                              '${(progress * 100).toInt()}%',
+                              style: const TextStyle(
+                                color: AppColors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Sharing to Story...',
+                          style: TextStyle(
+                            color: AppColors.black,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
+      // Wait for the upload task
+      try {
+        await uploadFuture;
+      } catch (_) {}
+
+      // Ensure animation reaches 100% if successful
+      if (uploadError == null) {
+        uploadFinished = true;
+        while (progressNotifier.value < 1.0) {
+          await Future.delayed(const Duration(milliseconds: 30));
+        }
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      timer.cancel();
+      progressNotifier.dispose();
+
+      if (mounted) {
+        Navigator.pop(context); // Dismiss dialog
+      }
+
+      if (uploadError != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to post story: $uploadError')),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Story posted successfully!')),
+        );
+        _loadData(); // Reload stories
+      }
+    }
   }
 }

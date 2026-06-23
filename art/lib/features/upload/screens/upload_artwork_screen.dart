@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/story_repository.dart';
 import 'package:image_cropper/image_cropper.dart';
 
 class UploadArtworkScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
   File? _imageFile;
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+  bool _alsoPostToStory = false;
 
   final List<String> _tags = ['AI Art', 'Digital Art', 'Fantasy'];
   final List<String> _suggestedTags = [
@@ -142,13 +144,21 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
       }
 
       // 2. Save artwork record to database
-      await ArtworkRepository().createArtwork(
+      final newArtwork = await ArtworkRepository().createArtwork(
         userId: currentUserId,
         imageUrl: imageUrl,
         title: title,
         description: _descriptionController.text.trim(),
         tags: finalTags,
       );
+
+      if (_alsoPostToStory) {
+        await StoryRepository().createStory(
+          userId: currentUserId,
+          artworkId: newArtwork.id,
+          mediaUrl: imageUrl,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -843,6 +853,54 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                           ),
                         );
                       }).toList(),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    const Text(
+                      'SHARING OPTIONS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkGrey,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.creamLight,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.lightGrey),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text(
+                          'Also post to Story',
+                          style: TextStyle(
+                            color: AppColors.black,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Followers will see this artwork on your active stories for 24 hours.',
+                          style: TextStyle(
+                            color: AppColors.darkGrey,
+                            fontSize: 11,
+                          ),
+                        ),
+                        activeColor: AppColors.coral,
+                        activeTrackColor: AppColors.coral.withOpacity(0.3),
+                        value: _alsoPostToStory,
+                        onChanged: _isUploading
+                            ? null
+                            : (val) {
+                                setState(() {
+                                  _alsoPostToStory = val;
+                                });
+                              },
+                      ),
                     ),
 
                     const SizedBox(height: 24),

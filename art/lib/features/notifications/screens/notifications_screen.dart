@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/notification_model.dart';
 import '../../../data/repositories/notification_repository.dart';
+import '../../../data/repositories/social_repository.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -128,7 +129,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onRefresh: _refresh,
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              padding: const EdgeInsets.only(top: 8, bottom: 24),
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final notification = notifications[index];
@@ -200,213 +201,103 @@ class _NotificationTile extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final actorName = notification.actorDisplayName?.trim().isNotEmpty == true
         ? notification.actorDisplayName!
-        : '@${notification.actorUsername ?? 'Someone'}';
-    final accentColor = _colorForType(theme, notification.type);
+        : notification.actorUsername != null
+            ? notification.actorUsername!
+            : 'Someone';
+    
     final unread = !notification.isRead;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
+    return InkWell(
+      onTap: onTap,
+      child: Container(
         color: unread
-            ? accentColor.withValues(alpha: isDark ? 0.16 : 0.10)
-            : colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: unread
-                    ? accentColor.withValues(alpha: 0.36)
-                    : colorScheme.outlineVariant.withValues(alpha: 0.55),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+            ? colorScheme.primary.withValues(alpha: isDark ? 0.15 : 0.05)
+            : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _ActorAvatar(notification: notification),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _ActorAvatar(notification: notification),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                  RichText(
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontSize: 14,
+                      ),
                       children: [
-                        Row(
-                          children: [
-                            _TypePill(
-                              type: notification.type,
-                              color: accentColor,
-                              icon: _iconForType(notification.type),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _formatTime(notification.createdAt),
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (unread) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: AppColors.coral,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.coral.withValues(
-                                        alpha: 0.45,
-                                      ),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
+                        TextSpan(
+                          text: actorName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 7),
-                        RichText(
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          text: TextSpan(
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: colorScheme.onSurface,
-                              height: 1.25,
-                              fontWeight: unread
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: actorName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              TextSpan(
-                                text: _messageSuffixForNotification(
-                                  notification,
-                                ),
-                              ),
-                            ],
+                        TextSpan(
+                          text: _messageSuffixForNotification(notification),
+                        ),
+                        TextSpan(
+                          text: '  ${_formatTime(notification.createdAt)}',
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 13,
                           ),
                         ),
-                        if (notification.type == 'comment' &&
-                            notification.commentContent?.trim().isNotEmpty ==
-                                true) ...[
-                          const SizedBox(height: 9),
-                          _CommentPreview(
-                            content: notification.commentContent!.trim(),
-                          ),
-                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  _TrailingPreview(notification: notification),
+                  if (notification.type == 'comment' &&
+                      notification.commentContent?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      notification.commentContent!.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            _TrailingPreview(notification: notification),
+          ],
         ),
       ),
     );
   }
 
-  static IconData _iconForType(String type) {
-    switch (type) {
-      case 'like':
-        return Icons.favorite;
-      case 'comment':
-        return Icons.chat_bubble_outline;
-      case 'follow':
-        return Icons.person_add_alt_1;
-      default:
-        return Icons.notifications_outlined;
-    }
-  }
-
-  static Color _colorForType(ThemeData theme, String type) {
-    switch (type) {
-      case 'like':
-        return AppColors.coral;
-      case 'comment':
-        return const Color(0xFF2F80ED);
-      case 'follow':
-        return AppColors.success;
-      default:
-        return theme.colorScheme.onSurfaceVariant;
-    }
-  }
-
   static String _messageSuffixForNotification(NotificationModel notification) {
-    final artworkTitle = notification.artworkTitle;
     switch (notification.type) {
       case 'like':
-        return artworkTitle == null
-            ? ' liked your artwork'
-            : ' liked your artwork "$artworkTitle"';
+        return ' liked your post.';
       case 'comment':
-        return artworkTitle == null
-            ? ' commented on your artwork'
-            : ' commented on "$artworkTitle"';
+        return ' commented:';
       case 'follow':
-        return ' started following you';
+        return ' started following you.';
       default:
-        return ' sent you a notification';
+        return ' sent you a notification.';
     }
   }
 
   static String _formatTime(DateTime dateTime) {
     final difference = DateTime.now().difference(dateTime);
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inHours < 1) return '${difference.inMinutes}m ago';
-    if (difference.inDays < 1) return '${difference.inHours}h ago';
-    if (difference.inDays < 7) return '${difference.inDays}d ago';
+    if (difference.inMinutes < 1) return 'now';
+    if (difference.inHours < 1) return '${difference.inMinutes}m';
+    if (difference.inDays < 1) return '${difference.inHours}h';
+    if (difference.inDays < 7) return '${difference.inDays}d';
     return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
   }
 }
 
-class _CommentPreview extends StatelessWidget {
-  const _CommentPreview({required this.content});
 
-  final String content;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.42 : 0.62,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
-        ),
-      ),
-      child: Text(
-        '"$content"',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: theme.colorScheme.onSurface,
-          height: 1.25,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
 
 class _ActorAvatar extends StatelessWidget {
   const _ActorAvatar({required this.notification});
@@ -416,115 +307,20 @@ class _ActorAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      width: 58,
-      height: 58,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.coral,
-                  theme.colorScheme.primary,
-                  const Color(0xFF2F80ED),
-                ],
-              ),
-            ),
-            padding: const EdgeInsets.all(2),
-            child: CircleAvatar(
-              backgroundColor: theme.colorScheme.surface,
-              backgroundImage:
-                  notification.actorAvatarUrl != null &&
-                      notification.actorAvatarUrl!.isNotEmpty
-                  ? CachedNetworkImageProvider(notification.actorAvatarUrl!)
-                  : null,
-              child:
-                  notification.actorAvatarUrl == null ||
-                      notification.actorAvatarUrl!.isEmpty
-                  ? Icon(
-                      Icons.person_outline,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    )
-                  : null,
-            ),
-          ),
-          Positioned(
-            right: -1,
-            bottom: 1,
-            child: Container(
-              width: 21,
-              height: 21,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: theme.scaffoldBackgroundColor),
-              ),
-              child: Icon(
-                _NotificationTile._iconForType(notification.type),
-                size: 13,
-                color: _NotificationTile._colorForType(
-                  theme,
-                  notification.type,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TypePill extends StatelessWidget {
-  const _TypePill({
-    required this.type,
-    required this.color,
-    required this.icon,
-  });
-
-  final String type;
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = switch (type) {
-      'like' => 'Like',
-      'comment' => 'Comment',
-      'follow' => 'Follow',
-      _ => 'Activity',
-    };
-
-    return Container(
-      height: 25,
-      padding: const EdgeInsets.symmetric(horizontal: 9),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+      backgroundImage: notification.actorAvatarUrl != null &&
+              notification.actorAvatarUrl!.isNotEmpty
+          ? CachedNetworkImageProvider(notification.actorAvatarUrl!)
+          : null,
+      child: notification.actorAvatarUrl == null ||
+              notification.actorAvatarUrl!.isEmpty
+          ? Icon(
+              Icons.person,
+              color: theme.colorScheme.onSurfaceVariant,
+            )
+          : null,
     );
   }
 }
@@ -538,30 +334,121 @@ class _TrailingPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final imageUrl = notification.artworkImageUrl;
     if (imageUrl != null && imageUrl.isNotEmpty) {
-      return Hero(
-        tag: 'notification-artwork-${notification.id}',
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: CachedNetworkImage(
-            imageUrl: imageUrl,
-            width: 58,
-            height: 58,
-            fit: BoxFit.cover,
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: CachedNetworkImage(
+          imageUrl: imageUrl,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    if (notification.type == 'follow' && notification.actorId != null) {
+      return _NotificationFollowButton(actorId: notification.actorId!);
+    }
+
+    return const SizedBox();
+  }
+}
+
+class _NotificationFollowButton extends StatefulWidget {
+  const _NotificationFollowButton({required this.actorId});
+
+  final String actorId;
+
+  @override
+  State<_NotificationFollowButton> createState() => _NotificationFollowButtonState();
+}
+
+class _NotificationFollowButtonState extends State<_NotificationFollowButton> {
+  bool _isFollowing = false;
+  bool _isLoading = true;
+  final String? _currentUserId = Supabase.instance.client.auth.currentUser?.id;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFollowingStatus();
+  }
+
+  Future<void> _checkFollowingStatus() async {
+    if (_currentUserId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final isFollowing = await SocialRepository().isFollowing(_currentUserId!, widget.actorId);
+      if (mounted) {
+        setState(() {
+          _isFollowing = isFollowing;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_currentUserId == null || _isLoading) return;
+
+    final wasFollowing = _isFollowing;
+    setState(() {
+      _isFollowing = !wasFollowing;
+    });
+
+    try {
+      if (wasFollowing) {
+        await SocialRepository().unfollowUser(_currentUserId!, widget.actorId);
+      } else {
+        await SocialRepository().followUser(_currentUserId!, widget.actorId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFollowing = wasFollowing;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const SizedBox(
+        width: 70,
+        height: 30,
+        child: Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
       );
     }
 
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        Icons.chevron_right,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: _toggleFollow,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: _isFollowing
+              ? theme.colorScheme.surfaceContainerHighest
+              : theme.colorScheme.primary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          _isFollowing ? 'Following' : 'Follow',
+          style: TextStyle(
+            color: _isFollowing ? theme.colorScheme.onSurface : Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

@@ -17,10 +17,7 @@ class AuthRepository {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
-      data: {
-        'username': username,
-        'display_name': username,
-      },
+      data: {'username': username, 'display_name': username},
     );
 
     final user = response.user;
@@ -53,8 +50,6 @@ class AuthRepository {
   }
 
   Future<UserResponse> updatePassword(String newPassword) async {
-    return await _client.auth.updateUser(
-      UserAttributes(password: newPassword),
-    );
+    return await _client.auth.updateUser(UserAttributes(password: newPassword));
   }
 }

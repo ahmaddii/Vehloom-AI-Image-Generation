@@ -19,6 +19,8 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/profile/screens/followers_list_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
+import '../../features/story/screens/story_viewer_screen.dart';
+import '../../data/models/story_model.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/home/screens/feed_view_all_screen.dart';
 
@@ -48,6 +50,7 @@ final GoRouter appRouter = GoRouter(
       ? '/onboarding1'
       : '/',
   refreshListenable: _authRefresh,
+  observers: [homeRouteObserver],
   redirect: (context, state) {
     final isLoggedIn = Supabase.instance.client.auth.currentSession != null;
     final location = state.uri.path;
@@ -151,6 +154,20 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
+    ),
+
+    // Story Viewer
+    GoRoute(
+      path: '/story/:userId',
+      builder: (context, state) {
+        final userId = state.pathParameters['userId'] ?? '';
+        final extra = state.extra as Map<String, dynamic>;
+        final stories = extra['stories'] as List<StoryModel>;
+        return StoryViewerScreen(
+          stories: stories,
+          initialUserId: userId,
+        );
+      },
     ),
   ],
 );
