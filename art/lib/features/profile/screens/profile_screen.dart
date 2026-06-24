@@ -11,6 +11,8 @@ import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/number_utils.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -131,24 +133,23 @@ class _ProfileScreenState extends State<ProfileScreen>
         return;
       }
 
-      final profile = await ProfileRepository().getProfile(_targetUserId);
-      final artworks = await ArtworkRepository().fetchUserArtworks(
-        _targetUserId,
-      );
-      final favoritedArtworks = await ArtworkRepository().fetchUserFavorites(
-        _targetUserId,
-      );
-
-      final followers = await SocialRepository().fetchFollowers(_targetUserId);
-      final following = await SocialRepository().fetchFollowing(_targetUserId);
-
+      ProfileModel? profile;
+      List<ArtworkModel> artworks = [];
+      List<ArtworkModel> favoritedArtworks = [];
+      List<ProfileModel> followers = [];
+      List<ProfileModel> following = [];
       bool isFollowing = false;
-      if (!_isMe && _currentUserId.isNotEmpty) {
-        isFollowing = await SocialRepository().isFollowing(
-          _currentUserId,
-          _targetUserId,
-        );
-      }
+
+      // Parallel execution
+      await Future.wait([
+        ProfileRepository().getProfile(_targetUserId).then((v) => profile = v),
+        ArtworkRepository().fetchUserArtworks(_targetUserId).then((v) => artworks = v),
+        ArtworkRepository().fetchUserFavorites(_targetUserId).then((v) => favoritedArtworks = v),
+        SocialRepository().fetchFollowers(_targetUserId).then((v) => followers = v),
+        SocialRepository().fetchFollowing(_targetUserId).then((v) => following = v),
+        if (!_isMe && _currentUserId.isNotEmpty)
+          SocialRepository().isFollowing(_currentUserId, _targetUserId).then((v) => isFollowing = v),
+      ]);
 
       if (mounted) {
         setState(() {
@@ -353,14 +354,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildStatColumn('${_artworks.length}', 'Posts'),
+                          _buildStatColumn(NumberUtils.format(_artworks.length), 'Posts'),
                           _buildStatColumn(
-                            '$_followersCount',
+                            NumberUtils.format(_followersCount),
                             'Followers',
                             onTap: () => _showSocialList(true),
                           ),
                           _buildStatColumn(
-                            '$_followingCount',
+                            NumberUtils.format(_followingCount),
                             'Following',
                             onTap: () => _showSocialList(false),
                           ),
@@ -469,7 +470,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   onTap: () =>
                                       context.push('/artwork/${artwork.id}'),
                                   child: CachedNetworkImage(
-                                    imageUrl: artwork.imageUrl,
+                                    imageUrl: ImageUtils.getThumbnailUrl(artwork.imageUrl, width: 400, height: 400),
+                                    memCacheWidth: 400,
                                     fit: BoxFit.cover,
                                     placeholder: (context, url) =>
                                         Container(color: AppColors.creamDark),
@@ -509,7 +511,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   onTap: () =>
                                       context.push('/artwork/${artwork.id}'),
                                   child: CachedNetworkImage(
-                                    imageUrl: artwork.imageUrl,
+                                    imageUrl: ImageUtils.getThumbnailUrl(artwork.imageUrl, width: 400, height: 400),
+                                    memCacheWidth: 400,
                                     fit: BoxFit.cover,
                                     placeholder: (context, url) =>
                                         Container(color: AppColors.creamDark),

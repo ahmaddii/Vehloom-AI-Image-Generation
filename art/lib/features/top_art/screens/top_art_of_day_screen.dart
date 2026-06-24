@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,7 +10,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../data/models/artwork_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
-import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 
 class TopArtOfDayScreen extends StatefulWidget {
@@ -151,66 +151,106 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         : <ArtworkModel>[];
 
     return Scaffold(
-      backgroundColor: AppColors.black,
+      backgroundColor: AppColors.creamBg,
+      appBar: AppBar(
+        backgroundColor: AppColors.creamBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.black),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              // Fallback to home if navigation stack is empty (e.g., opened via deep link or bottom nav)
+              context.go('/');
+            }
+          },
+        ),
+        title: const Text(
+          'Top Art of the Day',
+          style: TextStyle(
+            color: AppColors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            letterSpacing: -0.5,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: AppColors.black),
+            onPressed: _loadTopArtworks,
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           if (!hasArt && _isLoading)
-            Container(
-              color: AppColors.creamBg,
-              child: const Center(
-                child: CircularProgressIndicator(color: AppColors.coral),
-              ),
-            )
+            _buildSkeletonLoader()
           else if (!hasArt)
             _buildEmptyState()
           else
-            CustomScrollView(
-              slivers: [
-                if (topOne != null) _buildSliverHero(topOne),
-                SliverToBoxAdapter(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: AppColors.creamBg,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(32),
+            ListView(
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 8,
+                bottom: 24,
+              ),
+              children: [
+                // Timer Pill
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12, // Reduced from 16 to make it slightly thinner
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0F0), // Light red
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.timer_outlined,
+                        color: AppColors.coral,
+                        size: 18,
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
-                          child: Text(
-                            'Runner Ups',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
-                              color: AppColors.black.withOpacity(0.8),
-                            ),
-                          ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'New picks in ',
+                        style: TextStyle(
+                          color: AppColors.black.withOpacity(0.7),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            padding: EdgeInsets.zero,
-                            itemCount: restRankings.length,
-                            itemBuilder: (context, index) => _buildRunnerUpTile(
-                              restRankings[index],
-                              index + 2,
-                            ),
-                          ),
+                      ),
+                      Text(
+                        _formatDuration(_timeLeft),
+                        style: const TextStyle(
+                          color: AppColors.coral,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900, // Extra bold
+                          letterSpacing: 1.0,
                         ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Container(color: AppColors.creamBg),
+                const SizedBox(height: 24),
+                // Top Art Card
+                if (topOne != null) _buildTopArtCard(topOne),
+                const SizedBox(height: 24),
+                // Runner Ups List
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: restRankings.length,
+                  itemBuilder: (context, index) =>
+                      _buildRunnerUpTile(restRankings[index], index + 2),
                 ),
               ],
             ),
@@ -254,257 +294,323 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
       appBar: AppBar(
         title: const Text(
           'Top Art of the Day',
-          style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: AppColors.black,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.creamBg,
         elevation: 0,
+        centerTitle: true,
       ),
       body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'No artworks have been uploaded yet today. Be the first to upload!',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.black,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        child: Text(
+          'No rankings available yet today.\nCheck back later!',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16, color: AppColors.darkGrey),
         ),
       ),
     );
   }
 
-  Widget _buildSliverHero(ArtworkModel topOne) {
-    return SliverAppBar(
-      expandedHeight: MediaQuery.of(context).size.height * 0.65,
-      pinned: true,
-      stretch: true,
-      backgroundColor: AppColors.black,
-      leading: Navigator.of(context).canPop()
-          ? Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: AppColors.creamLight,
-                    size: 20,
-                  ),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
-            )
-          : null,
-      title: const Text(
-        'Art of the Day',
-        style: TextStyle(
-          color: AppColors.creamLight,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.5,
-        ),
-      ),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
+  Widget _buildSkeletonLoader() {
+    return ListView(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 24),
+      children: [
+        // Skeleton Timer Pill
+        Shimmer.fromColors(
+          baseColor: AppColors.creamDark,
+          highlightColor: AppColors.creamLight,
           child: Container(
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
-              shape: BoxShape.circle,
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: IconButton(
-              icon: const Icon(
-                Icons.refresh,
-                color: AppColors.creamLight,
-                size: 20,
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Skeleton Top Art Card
+        Shimmer.fromColors(
+          baseColor: AppColors.creamDark,
+          highlightColor: AppColors.creamLight,
+          child: Container(
+            height: 350,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Skeleton Runner Ups
+        ...List.generate(
+          4,
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Shimmer.fromColors(
+              baseColor: AppColors.creamDark,
+              highlightColor: AppColors.creamLight,
+              child: Container(
+                height: 70,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
-              onPressed: _loadTopArtworks,
             ),
           ),
         ),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [
-          StretchMode.zoomBackground,
-          StretchMode.blurBackground,
-        ],
-        background: GestureDetector(
-          onTap: () => context.push('/artwork/${topOne.id}'),
-          child: Stack(
-            fit: StackFit.expand,
+    );
+  }
+
+  Widget _buildTopArtCard(ArtworkModel topOne) {
+    final isLandscape = !_isTopOnePortrait;
+
+    return GestureDetector(
+      onTap: () => context.push('/artwork/${topOne.id}'),
+      child: Container(
+        height: isLandscape ? null : 220,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: isLandscape
+            ? _buildLandscapeLayout(topOne)
+            : _buildPortraitLayout(topOne),
+      ),
+    );
+  }
+
+  Widget _buildPortraitLayout(ArtworkModel topOne) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 1, child: _buildDetailsWidget(topOne, false)),
+        Expanded(
+          flex: 1,
+          child: Hero(
+            tag: 'top_art_${topOne.id}',
+            child: _buildImageWidget(topOne, false),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLandscapeLayout(ArtworkModel topOne) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildDetailsWidget(topOne, true),
+        Hero(
+          tag: 'top_art_${topOne.id}',
+          child: SizedBox(height: 260, child: _buildImageWidget(topOne, true)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailsWidget(ArtworkModel topOne, bool isLandscape) {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 1. Blurred Background Image
-              CachedNetworkImage(
-                imageUrl: topOne.imageUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) =>
-                    Container(color: AppColors.black),
-                errorWidget: (context, url, error) =>
-                    Container(color: AppColors.black),
-              ),
-              // 2. Heavy Blur Filter
-              BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                child: Container(color: Colors.black.withOpacity(0.3)),
-              ),
-              // 3. Crisp, Uncropped Artwork
-              CachedNetworkImage(
-                imageUrl: topOne.imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const SizedBox.shrink(),
-                errorWidget: (context, url, error) => const SizedBox.shrink(),
-              ),
-              // Gradient Overlay for readability
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.4),
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.6),
-                      Colors.black.withOpacity(0.95),
-                    ],
-                    stops: const [0.0, 0.3, 0.7, 1.0],
+              // Badge and Likes
+              // Badge and Likes
+              Row(
+                children: [
+                  Image.asset(
+                    'assets/icons/winner.png', // Changed to winner.png without tint
+                    width: 20,
+                    height: 20,
                   ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    '#1',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.black,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Icon(Icons.favorite, color: AppColors.coral, size: 18),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${topOne.likesCount}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                topOne.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 24, // Increased from 18
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.black,
+                  height: 1.1,
+                  letterSpacing: -0.5,
                 ),
               ),
-              // Content overlaid on the image
-              Positioned(
-                bottom: 32,
-                left: 24,
-                right: 24,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Badge and Timer Row
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.coral,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: const Text(
-                            '#1 WINNER',
-                            style: TextStyle(
-                              color: AppColors.creamLight,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
-                            ),
-                          ),
-                          child: Text(
-                            'Resets in ${_formatDuration(_timeLeft)}',
-                            style: const TextStyle(
-                              color: AppColors.creamLight,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      topOne.title,
-                      maxLines: 2,
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14, // Increased from 10
+                    backgroundColor: AppColors.lightGrey,
+                    backgroundImage:
+                        topOne.authorAvatarUrl != null &&
+                            topOne.authorAvatarUrl!.isNotEmpty
+                        ? CachedNetworkImageProvider(topOne.authorAvatarUrl!)
+                        : null,
+                    child:
+                        topOne.authorAvatarUrl == null ||
+                            topOne.authorAvatarUrl!.isEmpty
+                        ? const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 16, // Increased from 12
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      topOne.authorUsername != null
+                          ? '@${topOne.authorUsername}'
+                          : 'user',
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.creamLight,
-                        height: 1.1,
-                        letterSpacing: -0.5,
+                        fontSize: 14, // Increased from 12
+                        color: AppColors.darkGrey,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.white24,
-                          backgroundImage:
-                              topOne.authorAvatarUrl != null &&
-                                  topOne.authorAvatarUrl!.isNotEmpty
-                              ? CachedNetworkImageProvider(
-                                  topOne.authorAvatarUrl!,
-                                )
-                              : null,
-                          child:
-                              topOne.authorAvatarUrl == null ||
-                                  topOne.authorAvatarUrl!.isEmpty
-                              ? const Icon(
-                                  Icons.person,
-                                  color: AppColors.creamLight,
-                                  size: 20,
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            topOne.authorUsername != null
-                                ? '@${topOne.authorUsername}'
-                                : 'user',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: AppColors.creamLight,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.favorite,
-                          color: AppColors.coral,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${topOne.likesCount}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.creamLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                topOne.description ?? 'Artwork showing a beautiful scene',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13, // Increased from 11
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.darkGrey.withOpacity(0.8),
                 ),
               ),
             ],
           ),
-        ),
+          if (isLandscape)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 40, // Pulls the center point up slightly
+              child: Center(
+                child: Transform.scale(
+                  scale: 2.0, // Reduced from 2.5 to lower the size
+                  child: Lottie.asset(
+                    'assets/lottie/fire.json',
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.contain,
+                    repeat: true,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const SizedBox(); // Hide if error instead of grey box
+                    },
+                  ),
+                ),
+              ),
+            ),
+          if (!isLandscape)
+            Positioned(
+              bottom: 0,
+              right: -15,
+              child: Transform.scale(
+                scale: 1.5,
+                child: Lottie.asset(
+                  'assets/lottie/fire.json',
+                  width: 30,
+                  height: 30,
+                  fit: BoxFit.contain,
+                  repeat: true,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageWidget(ArtworkModel topOne, bool isLandscape) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: isLandscape
+            ? const BorderRadius.vertical(bottom: Radius.circular(24))
+            : const BorderRadius.horizontal(right: Radius.circular(24)),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Blurred background for letterboxing
+          CachedNetworkImage(
+            imageUrl: topOne.imageUrl,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(color: AppColors.creamBg),
+            errorWidget: (context, url, error) =>
+                Container(color: AppColors.creamBg),
+          ),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              color: Colors.white.withOpacity(0.3),
+            ), // Light glass tint
+          ),
+          // Crisp uncropped image
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(imageUrl: topOne.imageUrl),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildRunnerUpTile(ArtworkModel artwork, int rank) {
+    final isTrending = rank == 2 || rank == 3;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
@@ -512,11 +618,19 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.creamLight,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
+            border: isTrending
+                ? Border.all(
+                    color: AppColors.coral.withOpacity(0.6),
+                    width: 1.5,
+                  )
+                : null,
             boxShadow: [
               BoxShadow(
-                color: AppColors.black.withOpacity(0.04),
+                color: isTrending
+                    ? AppColors.coral.withOpacity(0.05)
+                    : AppColors.black.withOpacity(0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -530,9 +644,11 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                 child: Text(
                   '#$rank',
                   style: TextStyle(
-                    fontSize: rank <= 3 ? 20 : 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
-                    color: rank <= 3 ? AppColors.coral : AppColors.darkGrey,
+                    color: AppColors.black.withOpacity(
+                      0.2,
+                    ), // Light grey matching screenshot
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -542,10 +658,10 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
               Hero(
                 tag: 'top_art_${artwork.id}',
                 child: Container(
-                  width: 64,
-                  height: 64,
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     image: DecorationImage(
                       image: CachedNetworkImageProvider(artwork.imageUrl),
                       fit: BoxFit.cover,
@@ -564,7 +680,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: AppColors.black,
                       ),
@@ -577,49 +693,106 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         color: AppColors.black.withOpacity(0.6),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              // Likes
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.creamBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.favorite,
-                      color: AppColors.coral,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${artwork.likesCount}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.black,
+                    if (isTrending) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.coral.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Trending',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.coral,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Transform.translate(
+                              offset: const Offset(
+                                0,
+                                -2.5,
+                              ), // Decrease the Y value to move it further UP
+                              child: Transform.scale(
+                                scale: 1.5,
+                                child: Lottie.asset(
+                                  'assets/lottie/fire.json',
+                                  width: 10,
+                                  height: 10,
+                                  repeat: true,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const SizedBox(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              // Likes
+              isTrending
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.favorite,
+                          color: AppColors.coral,
+                          size: 16,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${artwork.likesCount}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.coral,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.favorite_border,
+                          color: AppColors.darkGrey,
+                          size: 16,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${artwork.likesCount}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.darkGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+              const SizedBox(width: 4),
             ],
           ),
         ),
       ),
     );
   }
-
-
 }

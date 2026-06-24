@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,10 +18,12 @@ import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/utils/image_utils.dart';
 import '../../../data/models/story_model.dart';
 import '../../../data/repositories/story_repository.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../../core/utils/number_utils.dart';
 
 // Global RouteObserver instance – register this in MaterialApp/GoRouter
 final RouteObserver<ModalRoute<void>> homeRouteObserver =
@@ -44,18 +50,28 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   List<StoryModel> _activeStories = [];
   List<ArtworkModel> _masonryArtworks = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  int _currentOffset = 0;
+  bool _hasMore = true;
   int _unreadNotificationsCount = 0;
   RealtimeChannel? _notificationsChannel;
   RealtimeChannel? _feedChannel;
   bool _hasNewPosts = false;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _scrollController.addListener(_onScroll);
+    _initializeData();
     _loadUnreadNotificationsCount();
     _subscribeToNotificationBadge();
     _subscribeToFeedUpdates();
+  }
+
+  Future<void> _initializeData() async {
+    await _loadCachedData();
+    _loadData(showLoading: _masonryArtworks.isEmpty);
   }
 
   @override
@@ -85,7 +101,66 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     if (feedChannel != null) {
       Supabase.instance.client.removeChannel(feedChannel);
     }
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore) {
+        _loadData(showLoading: false, isLoadMore: true);
+      }
+    }
+  }
+
+  Future<void> _loadCachedData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Load Feed Cache
+      final artworksJson = prefs.getString('cached_home_feed');
+      if (artworksJson != null) {
+        final List decoded = jsonDecode(artworksJson);
+        final artworks = decoded
+            .map((e) => ArtworkModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _masonryArtworks = artworks;
+            _isLoading = false; // Disable loader instantly!
+          });
+        }
+      }
+
+      // Load Stories Cache
+      final storiesJson = prefs.getString('cached_home_stories');
+      if (storiesJson != null) {
+        final List decoded = jsonDecode(storiesJson);
+        final stories = decoded
+            .map((e) => StoryModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _activeStories = stories;
+          });
+        }
+      }
+
+      // Load Creators Cache
+      final creatorsJson = prefs.getString('cached_home_creators');
+      if (creatorsJson != null) {
+        final List decoded = jsonDecode(creatorsJson);
+        final creators = decoded
+            .map((e) => ProfileModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _creators = creators;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadUnreadNotificationsCount() async {
@@ -173,28 +248,59 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
         .subscribe();
   }
 
-  Future<void> _loadData({bool showLoading = true}) async {
+  Future<void> _loadData({
+    bool showLoading = true,
+    bool isLoadMore = false,
+  }) async {
     if (!mounted) return;
-    if (showLoading) {
+
+    if (!isLoadMore) {
+      _currentOffset = 0;
+      _hasMore = true;
+    }
+
+    if (_isLoadingMore || !_hasMore) return;
+
+    if (showLoading && !isLoadMore) {
       setState(() {
         _isLoading = true;
         _hasNewPosts = false;
       });
     }
+
+    if (isLoadMore) {
+      setState(() {
+        _isLoadingMore = true;
+      });
+    }
+
     try {
-      final artworks = await ArtworkRepository().fetchLatestArtworks();
       final currentUserId = AuthRepository().currentUser?.id;
-      List<ProfileModel> creators = [];
+
+      late List<ArtworkModel> newArtworks;
       ProfileModel? myProfile;
       List<StoryModel> activeStories = [];
-      if (currentUserId != null) {
-        // Fetch current user's profile
-        myProfile = await ProfileRepository().getProfile(currentUserId);
+      List<ProfileModel> followed = [];
 
-        // Fetch active stories
-        activeStories = await StoryRepository().fetchActiveStories();
+      // Parallel execution for massive speed boost
+      await Future.wait([
+        ArtworkRepository()
+            .fetchLatestArtworks(offset: _currentOffset, limit: 20)
+            .then((v) => newArtworks = v),
+        if (currentUserId != null && !isLoadMore)
+          ProfileRepository()
+              .getProfile(currentUserId)
+              .then((v) => myProfile = v),
+        if (currentUserId != null && !isLoadMore)
+          StoryRepository().fetchActiveStories().then((v) => activeStories = v),
+        if (currentUserId != null && !isLoadMore)
+          SocialRepository()
+              .fetchFollowing(currentUserId)
+              .then((v) => followed = v),
+      ]);
 
-        // Fallback to Auth metadata if profiles table record is missing/delayed
+      List<ProfileModel> creators = [];
+      if (currentUserId != null && !isLoadMore) {
         if (myProfile == null) {
           final email = AuthRepository().currentUser?.email ?? '';
           final metaUsername =
@@ -214,26 +320,52 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
           );
         }
 
-        creators.add(myProfile);
-
-        // Fetch followed creators
-        final followed = await SocialRepository().fetchFollowing(currentUserId);
+        creators.add(myProfile!);
         creators.addAll(followed);
       }
+
       if (mounted) {
         setState(() {
-          _myProfile = myProfile;
-          _masonryArtworks = artworks;
-          _creators = creators;
-          _activeStories = activeStories;
+          if (isLoadMore) {
+            _masonryArtworks.addAll(newArtworks);
+          } else {
+            if (myProfile != null) _myProfile = myProfile;
+            _masonryArtworks = newArtworks;
+            _creators = creators;
+            _activeStories = activeStories;
+
+            // Save fresh data to local cache for instant next startup
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setString(
+                'cached_home_feed',
+                jsonEncode(newArtworks.map((e) => e.toJson()).toList()),
+              );
+              prefs.setString(
+                'cached_home_stories',
+                jsonEncode(activeStories.map((e) => e.toJson()).toList()),
+              );
+              prefs.setString(
+                'cached_home_creators',
+                jsonEncode(creators.map((e) => e.toJson()).toList()),
+              );
+            });
+          }
+
+          if (newArtworks.length < 20) {
+            _hasMore = false;
+          } else {
+            _currentOffset += 20;
+          }
         });
       }
     } catch (e) {
       print('HomeFeedScreen _loadData error: $e');
     }
-    if (mounted && showLoading) {
+
+    if (mounted) {
       setState(() {
         _isLoading = false;
+        _isLoadingMore = false;
       });
     }
   }
@@ -279,6 +411,32 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   double _getAspectRatioForIndex(int index) {
     final ratios = [0.75, 1.0, 1.25, 0.9, 1.1];
     return ratios[index % ratios.length];
+  }
+
+  Widget _buildSkeletonGrid() {
+    return MasonryGridView.count(
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        final ratios = [0.75, 1.0, 1.25, 0.9, 1.1];
+        final aspectRatio = ratios[index % ratios.length];
+        return Shimmer.fromColors(
+          baseColor: AppColors.creamDark,
+          highlightColor: AppColors.creamLight,
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -664,11 +822,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: _isLoading
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.coral,
-                              ),
-                            )
+                          ? _buildSkeletonGrid()
                           : _filteredArtworks.isEmpty
                           ? const Center(
                               child: Text(
@@ -682,175 +836,228 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                           : RefreshIndicator(
                               onRefresh: _loadData,
                               color: AppColors.coral,
-                              child: MasonryGridView.count(
-                                crossAxisCount: 2,
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 12,
-                                itemCount: _filteredArtworks.length,
-                                itemBuilder: (context, index) {
-                                  final artwork = _filteredArtworks[index];
-                                  final aspectRatio = _getAspectRatioForIndex(
-                                    index,
-                                  );
-                                  return _DoubleTapLikeWrapper(
-                                    onDoubleTap: () async {
-                                      final currentUserId =
-                                          AuthRepository().currentUser?.id;
-                                      if (currentUserId != null) {
-                                        // Trigger like in background
-                                        try {
-                                          await ArtworkRepository().toggleLike(
-                                            artwork.id,
-                                            currentUserId,
-                                          );
-                                          _loadData(showLoading: false);
-                                        } catch (_) {}
-                                      }
-                                    },
-                                    onTap: () =>
-                                        context.push('/artwork/${artwork.id}'),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(24),
-                                      child: Stack(
-                                        children: [
-                                          Hero(
-                                            tag: 'artwork-${artwork.id}',
-                                            child: CachedNetworkImage(
-                                              imageUrl: artwork.imageUrl,
-                                              fit: BoxFit.cover,
-                                              placeholder: (context, url) =>
-                                                  AspectRatio(
-                                                    aspectRatio: aspectRatio,
-                                                    child: Container(
-                                                      color:
-                                                          AppColors.creamDark,
+                              child: AnimationLimiter(
+                                child: MasonryGridView.count(
+                                  controller: _scrollController,
+                                  crossAxisCount: 2,
+                                  mainAxisSpacing: 12,
+                                  crossAxisSpacing: 12,
+                                  itemCount: _filteredArtworks.length,
+                                  itemBuilder: (context, index) {
+                                    final artwork = _filteredArtworks[index];
+                                    final aspectRatio = _getAspectRatioForIndex(
+                                      index,
+                                    );
+                                    return AnimationConfiguration.staggeredGrid(
+                                      position: index,
+                                      duration: const Duration(
+                                        milliseconds: 500,
+                                      ),
+                                      columnCount: 2,
+                                      child: SlideAnimation(
+                                        verticalOffset: 50.0,
+                                        child: FadeInAnimation(
+                                          child: _DoubleTapLikeWrapper(
+                                            onDoubleTap: () async {
+                                              final currentUserId =
+                                                  AuthRepository()
+                                                      .currentUser
+                                                      ?.id;
+                                              if (currentUserId != null) {
+                                                // Trigger like in background
+                                                try {
+                                                  await ArtworkRepository()
+                                                      .toggleLike(
+                                                        artwork.id,
+                                                        currentUserId,
+                                                      );
+                                                  _loadData(showLoading: false);
+                                                } catch (_) {}
+                                              }
+                                            },
+                                            onTap: () => context.push(
+                                              '/artwork/${artwork.id}',
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                              child: Stack(
+                                                children: [
+                                                  Hero(
+                                                    tag:
+                                                        'artwork-${artwork.id}',
+                                                    child: CachedNetworkImage(
+                                                      imageUrl:
+                                                          ImageUtils.getThumbnailUrl(
+                                                            artwork.imageUrl,
+                                                            width: 400,
+                                                            height:
+                                                                (400 / aspectRatio)
+                                                                    .round(),
+                                                          ),
+                                                      memCacheWidth: 400,
+                                                      fit: BoxFit.cover,
+                                                      placeholder:
+                                                          (
+                                                            context,
+                                                            url,
+                                                          ) => AspectRatio(
+                                                            aspectRatio:
+                                                                aspectRatio,
+                                                            child: Container(
+                                                              color: AppColors
+                                                                  .creamDark,
+                                                            ),
+                                                          ),
+                                                      errorWidget:
+                                                          (
+                                                            context,
+                                                            url,
+                                                            error,
+                                                          ) => AspectRatio(
+                                                            aspectRatio:
+                                                                aspectRatio,
+                                                            child: Container(
+                                                              color: AppColors
+                                                                  .creamDark,
+                                                              child: const Icon(
+                                                                Icons
+                                                                    .broken_image,
+                                                                color: AppColors
+                                                                    .darkGrey,
+                                                              ),
+                                                            ),
+                                                          ),
                                                     ),
                                                   ),
-                                              errorWidget:
-                                                  (
-                                                    context,
-                                                    url,
-                                                    error,
-                                                  ) => AspectRatio(
-                                                    aspectRatio: aspectRatio,
+
+                                                  // Likes Badge on top-right
+                                                  Positioned(
+                                                    top: 12,
+                                                    right: 12,
                                                     child: Container(
-                                                      color:
-                                                          AppColors.creamDark,
-                                                      child: const Icon(
-                                                        Icons.broken_image,
-                                                        color:
-                                                            AppColors.darkGrey,
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.black
+                                                            .withOpacity(0.4),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.favorite,
+                                                            color:
+                                                                AppColors.coral,
+                                                            size: 12,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 4,
+                                                          ),
+                                                          Text(
+                                                            NumberUtils.format(artwork.likesCount),
+                                                            style: const TextStyle(
+                                                              color: AppColors
+                                                                  .creamLight,
+                                                              fontSize: 10,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ),
                                                   ),
-                                            ),
-                                          ),
 
-                                          // Likes Badge on top-right
-                                          Positioned(
-                                            top: 12,
-                                            right: 12,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.black
-                                                    .withOpacity(0.4),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(
-                                                    Icons.favorite,
-                                                    color: AppColors.coral,
-                                                    size: 12,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    '${artwork.likesCount}',
-                                                    style: const TextStyle(
-                                                      color:
-                                                          AppColors.creamLight,
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.bold,
+                                                  // Author avatar / handle on bottom-left if present
+                                                  if (artwork.authorUsername !=
+                                                      null)
+                                                    Positioned(
+                                                      bottom: 12,
+                                                      left: 12,
+                                                      child: Row(
+                                                        children: [
+                                                          CircleAvatar(
+                                                            radius: 10,
+                                                            backgroundImage:
+                                                                artwork.authorAvatarUrl !=
+                                                                        null &&
+                                                                    artwork
+                                                                        .authorAvatarUrl!
+                                                                        .isNotEmpty
+                                                                ? CachedNetworkImageProvider(
+                                                                    artwork
+                                                                        .authorAvatarUrl!,
+                                                                  )
+                                                                : null,
+                                                            child:
+                                                                artwork.authorAvatarUrl ==
+                                                                        null ||
+                                                                    artwork
+                                                                        .authorAvatarUrl!
+                                                                        .isEmpty
+                                                                ? const Icon(
+                                                                    Icons
+                                                                        .person,
+                                                                    size: 8,
+                                                                    color: AppColors
+                                                                        .black,
+                                                                  )
+                                                                : null,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 6,
+                                                          ),
+                                                          Text(
+                                                            artwork.userId ==
+                                                                    AuthRepository()
+                                                                        .currentUser
+                                                                        ?.id
+                                                                ? '@${artwork.authorUsername} (You)'
+                                                                : '@${artwork.authorUsername}',
+                                                            style: const TextStyle(
+                                                              color: AppColors
+                                                                  .creamLight,
+                                                              fontSize: 11,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              shadows: [
+                                                                Shadow(
+                                                                  blurRadius:
+                                                                      4.0,
+                                                                  color: Colors
+                                                                      .black,
+                                                                  offset:
+                                                                      Offset(
+                                                                        0,
+                                                                        1,
+                                                                      ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
-                                                  ),
                                                 ],
                                               ),
                                             ),
                                           ),
-
-                                          // Author avatar / handle on bottom-left if present
-                                          if (artwork.authorUsername != null)
-                                            Positioned(
-                                              bottom: 12,
-                                              left: 12,
-                                              child: Row(
-                                                children: [
-                                                  CircleAvatar(
-                                                    radius: 10,
-                                                    backgroundImage:
-                                                        artwork.authorAvatarUrl !=
-                                                                null &&
-                                                            artwork
-                                                                .authorAvatarUrl!
-                                                                .isNotEmpty
-                                                        ? CachedNetworkImageProvider(
-                                                            artwork
-                                                                .authorAvatarUrl!,
-                                                          )
-                                                        : null,
-                                                    child:
-                                                        artwork.authorAvatarUrl ==
-                                                                null ||
-                                                            artwork
-                                                                .authorAvatarUrl!
-                                                                .isEmpty
-                                                        ? const Icon(
-                                                            Icons.person,
-                                                            size: 8,
-                                                            color:
-                                                                AppColors.black,
-                                                          )
-                                                        : null,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    artwork.userId ==
-                                                            AuthRepository()
-                                                                .currentUser
-                                                                ?.id
-                                                        ? '@${artwork.authorUsername} (You)'
-                                                        : '@${artwork.authorUsername}',
-                                                    style: const TextStyle(
-                                                      color:
-                                                          AppColors.creamLight,
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      shadows: [
-                                                        Shadow(
-                                                          blurRadius: 4.0,
-                                                          color: Colors.black,
-                                                          offset: Offset(0, 1),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                     ),

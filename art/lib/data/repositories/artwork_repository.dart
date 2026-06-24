@@ -9,14 +9,18 @@ class ArtworkRepository {
   final NotificationRepository _notificationRepository =
       NotificationRepository();
 
-  Future<List<ArtworkModel>> fetchLatestArtworks() async {
+  Future<List<ArtworkModel>> fetchLatestArtworks({
+    int offset = 0,
+    int limit = 20,
+  }) async {
     try {
       final response = await _client
           .from('artworks')
           .select(
             '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
           )
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
 
       return (response as List)
           .map((json) => ArtworkModel.fromJson(json))
@@ -26,7 +30,11 @@ class ArtworkRepository {
     }
   }
 
-  Future<List<ArtworkModel>> fetchUserArtworks(String userId) async {
+  Future<List<ArtworkModel>> fetchUserArtworks(
+    String userId, {
+    int offset = 0,
+    int limit = 20,
+  }) async {
     try {
       final response = await _client
           .from('artworks')
@@ -34,7 +42,8 @@ class ArtworkRepository {
             '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
           )
           .eq('user_id', userId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
 
       return (response as List)
           .map((json) => ArtworkModel.fromJson(json))

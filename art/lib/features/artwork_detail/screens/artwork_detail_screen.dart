@@ -7,6 +7,7 @@ import '../../../data/models/artwork_model.dart';
 import '../../../data/models/comment_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../core/utils/number_utils.dart';
 
 class ArtworkDetailScreen extends StatefulWidget {
   final String artworkId;
@@ -348,7 +349,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      '$_likesCount',
+                                      NumberUtils.format(_likesCount),
                                       style: const TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
@@ -528,7 +529,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  '${_comments.length}',
+                                  NumberUtils.format(_comments.length),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: AppColors.creamLight,

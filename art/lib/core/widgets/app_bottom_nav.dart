@@ -13,11 +13,9 @@ class AppBottomNavBar extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.creamLight,
-        border: Border(
-          top: BorderSide(color: AppColors.lightGrey, width: 1),
-        ),
+        border: Border(top: BorderSide(color: AppColors.lightGrey, width: 1)),
       ),
-      padding: const EdgeInsets.only(top: 8, bottom: 12),
+      padding: const EdgeInsets.only(top: 8, bottom: 10),
       child: SafeArea(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -25,7 +23,7 @@ class AppBottomNavBar extends StatelessWidget {
           children: [
             _buildNavItem(
               context,
-              icon: currentIndex == 0 ? Icons.home : Icons.home_outlined,
+              assetPath: 'assets/icons/home.png',
               label: 'Home',
               index: 0,
               route: '/',
@@ -37,26 +35,26 @@ class AppBottomNavBar extends StatelessWidget {
               index: 1,
               route: '/search',
             ),
-            
+
             // Upload Button
             GestureDetector(
               onTap: () => context.push('/upload'),
               child: const Padding(
-                padding: EdgeInsets.only(bottom: 4),
+                padding: EdgeInsets.only(bottom: 10),
                 child: CustomAddButton(),
               ),
             ),
-            
+
             _buildNavItem(
               context,
-              icon: currentIndex == 3 ? Icons.emoji_events : Icons.emoji_events_outlined,
+              assetPath: 'assets/icons/trophy.png',
               label: 'Top',
               index: 3,
               route: '/top-art',
             ),
             _buildNavItem(
               context,
-              icon: currentIndex == 4 ? Icons.person : Icons.person_outline,
+              assetPath: 'assets/icons/profile.png',
               label: 'Profile',
               index: 4,
               route: '/profile',
@@ -67,7 +65,14 @@ class AppBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(BuildContext context, {required IconData icon, required String label, required int index, required String route}) {
+  Widget _buildNavItem(
+    BuildContext context, {
+    IconData? icon,
+    String? assetPath,
+    required String label,
+    required int index,
+    required String route,
+  }) {
     final isActive = currentIndex == index;
     return GestureDetector(
       onTap: () {
@@ -81,11 +86,20 @@ class AppBottomNavBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isActive ? AppColors.coral : AppColors.black,
-              size: 26,
-            ),
+            if (assetPath != null)
+              Image.asset(
+                assetPath,
+                width: 22,
+                height: 22,
+                color: isActive ? AppColors.coral : AppColors.black,
+              )
+            else if (icon != null)
+              Icon(
+                icon,
+                color: isActive ? AppColors.coral : AppColors.black,
+                size:
+                    26, // Increased slightly to match the visual weight of the PNGs
+              ),
             const SizedBox(height: 4),
             Text(
               label,

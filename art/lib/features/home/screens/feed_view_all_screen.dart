@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
@@ -12,6 +14,7 @@ import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/story_repository.dart';
 import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/utils/image_utils.dart';
 
 class FeedViewAllScreen extends StatefulWidget {
   const FeedViewAllScreen({super.key});
@@ -23,12 +26,17 @@ class FeedViewAllScreen extends StatefulWidget {
 class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
   List<ArtworkModel> _artworks = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  int _currentOffset = 0;
+  bool _hasMore = true;
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
   RealtimeChannel? _feedChannel;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadFeed();
     _subscribeToFeedUpdates();
   }
@@ -39,7 +47,17 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
     if (channel != null) {
       Supabase.instance.client.removeChannel(channel);
     }
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore) {
+        _loadFeed(showLoading: false, isLoadMore: true);
+      }
+    }
   }
 
   void _subscribeToFeedUpdates() {
@@ -66,26 +84,53 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
         .subscribe();
   }
 
-  Future<void> _loadFeed({bool showLoading = true}) async {
+  Future<void> _loadFeed({bool showLoading = true, bool isLoadMore = false}) async {
     if (!mounted) return;
-    if (showLoading) {
+    if (!isLoadMore) {
+      _currentOffset = 0;
+      _hasMore = true;
+    }
+
+    if (_isLoadingMore || !_hasMore) return;
+
+    if (showLoading && !isLoadMore) {
       setState(() {
         _isLoading = true;
       });
     }
 
+    if (isLoadMore) {
+      setState(() {
+        _isLoadingMore = true;
+      });
+    }
+
     try {
-      final artworks = await ArtworkRepository().fetchLatestArtworks();
+      final newArtworks = await ArtworkRepository().fetchLatestArtworks(
+        offset: _currentOffset,
+        limit: 20,
+      );
       if (mounted) {
         setState(() {
-          _artworks = artworks;
+          if (isLoadMore) {
+            _artworks.addAll(newArtworks);
+          } else {
+            _artworks = newArtworks;
+          }
+
+          if (newArtworks.length < 20) {
+            _hasMore = false;
+          } else {
+            _currentOffset += 20;
+          }
         });
       }
     } catch (_) {}
 
-    if (mounted && showLoading) {
+    if (mounted) {
       setState(() {
         _isLoading = false;
+        _isLoadingMore = false;
       });
     }
   }
@@ -93,6 +138,38 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
   double _getAspectRatioForIndex(int index) {
     final ratios = [0.75, 1.0, 1.25, 0.9, 1.1];
     return ratios[index % ratios.length];
+  }
+
+  Widget _buildSkeletonGrid() {
+    return MasonryGridView.count(
+      padding: const EdgeInsets.only(
+        left: 4,
+        right: 4,
+        top: 0,
+        bottom: 12,
+      ),
+      crossAxisCount: 2,
+      mainAxisSpacing: 4,
+      crossAxisSpacing: 4,
+      itemCount: 8,
+      itemBuilder: (context, index) {
+        final ratios = [0.75, 1.0, 1.25, 0.9, 1.1];
+        final aspectRatio = ratios[index % ratios.length];
+        return Shimmer.fromColors(
+          baseColor: AppColors.creamDark,
+          highlightColor: AppColors.creamLight,
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -121,9 +198,7 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
       body: Container(
         color: AppColors.creamBg,
         child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.coral),
-              )
+            ? _buildSkeletonGrid()
             : _artworks.isEmpty
             ? const Center(
                 child: Text(
@@ -138,26 +213,39 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
             : RefreshIndicator(
                 onRefresh: _loadFeed,
                 color: AppColors.coral,
-                child: MasonryGridView.count(
-                  padding: const EdgeInsets.only(
-                    left: 4,
-                    right: 4,
-                    top: 0,
-                    bottom: 12,
+                child: AnimationLimiter(
+                  child: MasonryGridView.count(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.only(
+                      left: 4,
+                      right: 4,
+                      top: 0,
+                      bottom: 12,
+                    ),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
+                    itemCount: _artworks.length,
+                    itemBuilder: (context, index) {
+                      final artwork = _artworks[index];
+                      final aspectRatio = _getAspectRatioForIndex(index);
+                      return AnimationConfiguration.staggeredGrid(
+                        position: index,
+                        duration: const Duration(milliseconds: 500),
+                        columnCount: 2,
+                        child: SlideAnimation(
+                          verticalOffset: 50.0,
+                          child: FadeInAnimation(
+                            child: GridArtworkCard(
+                              artwork: artwork,
+                              currentUserId: _currentUserId,
+                              aspectRatio: aspectRatio,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
-                  itemCount: _artworks.length,
-                  itemBuilder: (context, index) {
-                    final artwork = _artworks[index];
-                    final aspectRatio = _getAspectRatioForIndex(index);
-                    return GridArtworkCard(
-                      artwork: artwork,
-                      currentUserId: _currentUserId,
-                      aspectRatio: aspectRatio,
-                    );
-                  },
                 ),
               ),
       ),
@@ -634,7 +722,8 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
         child: Stack(
           children: [
             CachedNetworkImage(
-              imageUrl: widget.artwork.imageUrl,
+              imageUrl: ImageUtils.getThumbnailUrl(widget.artwork.imageUrl, width: 400, height: (400 / widget.aspectRatio).round()),
+              memCacheWidth: 400,
               fit: BoxFit.cover,
               placeholder: (context, url) => AspectRatio(
                 aspectRatio: widget.aspectRatio,

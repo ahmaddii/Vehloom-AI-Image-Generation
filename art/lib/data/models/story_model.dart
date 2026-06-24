@@ -54,6 +54,8 @@ class StoryModel {
       'media_url': mediaUrl,
       'created_at': createdAt.toIso8601String(),
       'expires_at': expiresAt.toIso8601String(),
+      if (profile != null) 'profiles': profile!.toJson(),
+      if (artwork != null) 'artworks': artwork!.toJson(),
     };
   }
 }
