@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 
@@ -21,6 +20,12 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (AuthRepository().currentUser != null) {
         context.go('/');
+      } else {
+        // Precache the heavy images for the 3rd screen in the background
+        for (int i = 1; i <= 12; i++) {
+          final ext = i == 2 ? 'png' : 'jpg';
+          precacheImage(AssetImage('assets/onboarding3/$i.$ext'), context);
+        }
       }
     });
   }
@@ -28,26 +33,22 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
   final List<Map<String, dynamic>> _slides = [
     {
       'title': 'Discover Beautiful and Amazing Illustrations',
-      'subtitle': 'Explore unique artwork from talented creators around the world, all in one inspiring place.',
+      'subtitle':
+          'Explore unique artwork from talented creators around the world, all in one inspiring place.',
       'type': 'single',
-      'image': 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=600&auto=format&fit=crop',
+      'image': 'assets/onboarding1/onboard1.png',
     },
     {
       'title': 'Share Your Creativity With the World',
-      'subtitle': 'Upload your illustrations and showcase your talent to a global audience.',
+      'subtitle':
+          'Upload your illustrations and showcase your talent to a global audience.',
       'type': 'grid',
       'images': [
-        'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=400&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1541701494587-cb58502866ab?q=80&w=400&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1501472312651-726afd116ff1?q=80&w=400&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=400&auto=format&fit=crop',
+        'assets/onboarding2/first.png',
+        'assets/onboarding2/second.png',
+        'assets/onboarding2/third.png',
+        'assets/onboarding2/fourth.png',
       ],
-    },
-    {
-      'title': 'Connect and Grow as an Artist',
-      'subtitle': 'Join a supportive community of AI artists, receive feedback, and elevate your craft.',
-      'type': 'single',
-      'image': 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?q=80&w=600&auto=format&fit=crop',
     },
   ];
 
@@ -62,212 +63,202 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // Top Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '11:30',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: AppColors.black,
-                    ),
+            Column(
+              children: [
+                // Page View for illustrations
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentPage = index;
+                      });
+                    },
+                    itemCount: _slides.length,
+                    itemBuilder: (context, index) {
+                      final slide = _slides[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                          left: 24,
+                          right: 24,
+                          top: 64,
+                        ),
+                        child: Column(
+                          children: [
+                            // Image Container
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(24),
+                                child: slide['type'] == 'single'
+                                    ? Image.asset(
+                                        slide['image'],
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                      )
+                                    : Center(
+                                        child: GridView.builder(
+                                          shrinkWrap: true,
+                                          padding: EdgeInsets.zero,
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 2,
+                                                crossAxisSpacing: 12,
+                                                mainAxisSpacing: 12,
+                                                childAspectRatio:
+                                                    0.9, // Make images slightly taller to fill space nicely
+                                              ),
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: 4,
+                                          itemBuilder: (context, gridIndex) {
+                                            return ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              child: Image.asset(
+                                                slide['images'][gridIndex],
+                                                fit: BoxFit.cover,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+
+                            // Text Content
+                            Text(
+                              slide['title'],
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Text(
+                                slide['subtitle'],
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.black.withValues(alpha: 0.6),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+
+                            // Page Indicators
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(_slides.length, (
+                                dotIndex,
+                              ) {
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  height: 6,
+                                  width: dotIndex == _currentPage ? 24 : 8,
+                                  decoration: BoxDecoration(
+                                    color: dotIndex == _currentPage
+                                        ? AppColors.black
+                                        : AppColors.black.withValues(
+                                            alpha: 0.2,
+                                          ),
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                );
+                              }),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  Row(
+                ),
+
+                // Action Buttons
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: 16,
+                    bottom: 48,
+                  ),
+                  child: Column(
                     children: [
-                      Icon(Icons.widgets_outlined, size: 16, color: AppColors.black.withOpacity(0.7)),
-                      const SizedBox(width: 4),
-                      Icon(Icons.battery_4_bar_outlined, size: 16, color: AppColors.black.withOpacity(0.7)),
-                      const SizedBox(width: 4),
-                      const Text(
-                        '45',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: AppColors.black,
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56, // Adjusted button height
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (_currentPage < _slides.length - 1) {
+                              _pageController.nextPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            } else {
+                              // Go to the third screen (new NFT grid)
+                              context.push('/onboarding3');
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.black,
+                            foregroundColor: AppColors.creamLight,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            _currentPage < _slides.length - 1
+                                ? 'Next'
+                                : 'Continue',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
 
-            // Page View for illustrations
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                  });
-                },
-                itemCount: _slides.length,
-                itemBuilder: (context, index) {
-                  final slide = _slides[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: [
-                        // Image Container
-                        Expanded(
-                          flex: 12,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: slide['type'] == 'single'
-                                ? CachedNetworkImage(
-                                    imageUrl: slide['image'],
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    placeholder: (context, url) => Container(
-                                      color: AppColors.creamDark,
-                                      child: const Center(
-                                        child: CircularProgressIndicator(color: AppColors.coral),
-                                      ),
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      color: AppColors.creamDark,
-                                      child: const Icon(Icons.broken_image, size: 48, color: AppColors.darkGrey),
-                                    ),
-                                  )
-                                : GridView.builder(
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 12,
-                                    ),
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: 4,
-                                    itemBuilder: (context, gridIndex) {
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: CachedNetworkImage(
-                                          imageUrl: slide['images'][gridIndex],
-                                          fit: BoxFit.cover,
-                                          placeholder: (context, url) => Container(color: AppColors.creamDark),
-                                          errorWidget: (context, url, error) => Container(
-                                            color: AppColors.creamDark,
-                                            child: const Icon(Icons.broken_image, color: AppColors.darkGrey),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Page Indicators
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(_slides.length, (dotIndex) {
-                            return AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              height: 6,
-                              width: dotIndex == _currentPage ? 24 : 8,
-                              decoration: BoxDecoration(
-                                color: dotIndex == _currentPage
-                                    ? AppColors.black
-                                    : AppColors.black.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            );
-                          }),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // Text Content
-                        Expanded(
-                          flex: 8,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                slide['title'],
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.black,
-                                  height: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  slide['subtitle'],
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.black.withOpacity(0.6),
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (_currentPage < _slides.length - 1) {
-                          _pageController.nextPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          );
-                        } else {
-                          context.push('/signup');
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.black,
-                        foregroundColor: AppColors.creamLight,
-                      ),
-                      child: const Text('Get Started'),
-                    ),
+            // Skip Button
+            Positioned(
+              top: 0,
+              right: 16,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: _currentPage == 0 ? 1.0 : 0.0,
+                child: TextButton(
+                  onPressed: () {
+                    if (_currentPage == 0) {
+                      context.push('/onboarding3');
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.black.withValues(alpha: 0.6),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => context.push('/login'),
-                      style: TextButton.styleFrom(
-                        backgroundColor: AppColors.black.withOpacity(0.04),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                      ),
-                      child: const Text(
-                        'Log In',
-                        style: TextStyle(
-                          color: AppColors.black,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                  child: const Text(
+                    'Skip',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
-                ],
+                ),
               ),
             ),
           ],

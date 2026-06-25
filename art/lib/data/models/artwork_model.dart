@@ -7,6 +7,7 @@ class ArtworkModel {
   final List<String> tags;
   final int likesCount;
   final int commentsCount;
+  final int favoritesCount;
   final DateTime createdAt;
   final String? authorUsername;
   final String? authorAvatarUrl;
@@ -20,6 +21,7 @@ class ArtworkModel {
     required this.tags,
     required this.likesCount,
     required this.commentsCount,
+    this.favoritesCount = 0,
     required this.createdAt,
     this.authorUsername,
     this.authorAvatarUrl,
@@ -62,6 +64,22 @@ class ArtworkModel {
       parsedComments = json['comments_count'] as int? ?? 0;
     }
 
+    int parsedFavorites = 0;
+    if (json['favorites'] != null) {
+      if (json['favorites'] is List) {
+        final list = json['favorites'] as List;
+        if (list.isNotEmpty && list.first is Map && list.first['count'] != null) {
+          parsedFavorites = list.first['count'] as int;
+        } else {
+          parsedFavorites = list.length;
+        }
+      } else if (json['favorites'] is int) {
+        parsedFavorites = json['favorites'] as int;
+      }
+    } else {
+      parsedFavorites = json['favorites_count'] as int? ?? 0;
+    }
+
     return ArtworkModel(
       id: json['id'] as String,
       userId: json['user_id'] as String,
@@ -71,6 +89,7 @@ class ArtworkModel {
       tags: List<String>.from(json['tags'] ?? []),
       likesCount: parsedLikes,
       commentsCount: parsedComments,
+      favoritesCount: parsedFavorites,
       createdAt: DateTime.parse(json['created_at'] as String),
       authorUsername: profile?['username'] as String? ?? json['author_username'] as String?,
       authorAvatarUrl: profile?['avatar_url'] as String? ?? json['author_avatar_url'] as String?,
@@ -87,6 +106,7 @@ class ArtworkModel {
       'tags': tags,
       'likes_count': likesCount,
       'comments_count': commentsCount,
+      'favorites_count': favoritesCount,
       'created_at': createdAt.toIso8601String(),
       'author_username': authorUsername,
       'author_avatar_url': authorAvatarUrl,
@@ -102,6 +122,7 @@ class ArtworkModel {
     List<String>? tags,
     int? likesCount,
     int? commentsCount,
+    int? favoritesCount,
     DateTime? createdAt,
     String? authorUsername,
     String? authorAvatarUrl,
@@ -115,6 +136,7 @@ class ArtworkModel {
       tags: tags ?? this.tags,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      favoritesCount: favoritesCount ?? this.favoritesCount,
       createdAt: createdAt ?? this.createdAt,
       authorUsername: authorUsername ?? this.authorUsername,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,

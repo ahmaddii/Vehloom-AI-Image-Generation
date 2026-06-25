@@ -15,6 +15,7 @@ import '../../../data/repositories/story_repository.dart';
 import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/utils/image_utils.dart';
+import '../../../core/utils/number_utils.dart';
 
 class FeedViewAllScreen extends StatefulWidget {
   const FeedViewAllScreen({super.key});
@@ -194,60 +195,75 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.black),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: AppColors.black, size: 28),
+            onPressed: () {
+              context.push('/search');
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Container(
         color: AppColors.creamBg,
-        child: _isLoading
-            ? _buildSkeletonGrid()
-            : _artworks.isEmpty
-            ? const Center(
-                child: Text(
-                  'No artworks uploaded yet',
-                  style: TextStyle(
-                    color: AppColors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              )
-            : RefreshIndicator(
-                onRefresh: _loadFeed,
-                color: AppColors.coral,
-                child: AnimationLimiter(
-                  child: MasonryGridView.count(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(
-                      left: 4,
-                      right: 4,
-                      top: 0,
-                      bottom: 12,
-                    ),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 4,
-                    crossAxisSpacing: 4,
-                    itemCount: _artworks.length,
-                    itemBuilder: (context, index) {
-                      final artwork = _artworks[index];
-                      final aspectRatio = _getAspectRatioForIndex(index);
-                      return AnimationConfiguration.staggeredGrid(
-                        position: index,
-                        duration: const Duration(milliseconds: 500),
-                        columnCount: 2,
-                        child: SlideAnimation(
-                          verticalOffset: 50.0,
-                          child: FadeInAnimation(
-                            child: GridArtworkCard(
-                              artwork: artwork,
-                              currentUserId: _currentUserId,
-                              aspectRatio: aspectRatio,
-                            ),
-                          ),
+        child: Column(
+          children: [
+            Expanded(
+              child: _isLoading
+                  ? _buildSkeletonGrid()
+                  : _artworks.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No artworks found',
+                        style: TextStyle(
+                          color: AppColors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadFeed,
+                      color: AppColors.coral,
+                      child: AnimationLimiter(
+                        child: MasonryGridView.count(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.only(
+                            left: 4,
+                            right: 4,
+                            top: 12,
+                            bottom: 12,
+                          ),
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 4,
+                          crossAxisSpacing: 4,
+                          itemCount: _artworks.length,
+                          itemBuilder: (context, index) {
+                            final artwork = _artworks[index];
+                            final aspectRatio = _getAspectRatioForIndex(index);
+                            return AnimationConfiguration.staggeredGrid(
+                              position: index,
+                              duration: const Duration(milliseconds: 500),
+                              columnCount: 2,
+                              child: SlideAnimation(
+                                verticalOffset: 50.0,
+                                child: FadeInAnimation(
+                                  child: GridArtworkCard(
+                                    artwork: artwork,
+                                    currentUserId: _currentUserId,
+                                    aspectRatio: aspectRatio,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
@@ -275,12 +291,14 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
   int _likesCount = 0;
   int _commentsCount = 0;
   bool _isFavorited = false;
+  int _favoritesCount = 0;
 
   @override
   void initState() {
     super.initState();
     _likesCount = widget.artwork.likesCount;
     _commentsCount = widget.artwork.commentsCount;
+    _favoritesCount = widget.artwork.favoritesCount;
     _checkLikeStatus();
     _checkFavoriteStatus();
   }
@@ -306,6 +324,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
     final wasFavorited = _isFavorited;
     setState(() {
       _isFavorited = !wasFavorited;
+      _favoritesCount = wasFavorited ? _favoritesCount - 1 : _favoritesCount + 1;
     });
 
     try {
@@ -317,6 +336,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
       if (mounted) {
         setState(() {
           _isFavorited = wasFavorited;
+          _favoritesCount = wasFavorited ? _favoritesCount + 1 : _favoritesCount - 1;
         });
       }
     }
@@ -382,146 +402,187 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
     final messenger = ScaffoldMessenger.of(context);
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (builderContext, setModalState) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: AppColors.creamBg,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Pull handler line
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.lightGrey,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Background Layer
+                Positioned.fill(
+                  top: 60, // The top 60px of the Stack is transparent for the image to stick out
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: AppColors.creamBg,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  // Artwork Details Row
-                  Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CachedNetworkImage(
-                          imageUrl: widget.artwork.imageUrl,
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
+                ),
+                
+                // Close Button
+                Positioned(
+                  top: 60 + 16,
+                  left: 16,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(sheetContext),
+                    child: const Icon(Icons.close, color: AppColors.black, size: 28),
+                  ),
+                ),
+                
+                // Content Layer
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Center Artwork (naturally sized, preserving aspect ratio)
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: 320, // Generous height for portrait images
+                          maxWidth: MediaQuery.of(context).size.width * 0.65, // Leaves room for close button
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.artwork.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.black,
-                              ),
-                            ),
-                            if (widget.artwork.authorUsername != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                '@${widget.artwork.authorUsername}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.darkGrey,
-                                ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
                               ),
                             ],
-                          ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CachedNetworkImage(
+                              imageUrl: widget.artwork.imageUrl,
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              placeholder: (context, url) => AspectRatio(
+                                aspectRatio: widget.aspectRatio,
+                                child: CachedNetworkImage(
+                                  imageUrl: ImageUtils.getThumbnailUrl(
+                                    widget.artwork.imageUrl,
+                                    width: 400,
+                                    height: (400 / widget.aspectRatio).round(),
+                                  ),
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Shimmer.fromColors(
+                                    baseColor: AppColors.creamDark,
+                                    highlightColor: AppColors.creamLight,
+                                    child: Container(color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => AspectRatio(
+                                aspectRatio: widget.aspectRatio,
+                                child: Container(
+                                  color: AppColors.creamDark,
+                                  child: const Icon(Icons.broken_image_outlined, color: AppColors.darkGrey, size: 40),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 16),
+                    
+                  // Title and Description
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        Text(
+                          widget.artwork.title,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.black,
+                          ),
+                        ),
+                        if (widget.artwork.description != null &&
+                            widget.artwork.description!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.artwork.description!,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.darkGrey,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
-                  // Actions Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Like Action
-                      _buildQuickActionItem(
-                        icon: _isLiked ? Icons.favorite : Icons.favorite_border,
-                        iconColor: _isLiked ? AppColors.coral : AppColors.black,
-                        label: '$_likesCount Likes',
-                        onTap: () async {
-                          await _toggleLike();
-                          setModalState(() {});
-                          setState(() {});
-                        },
-                      ),
-                      // Comment Action
-                      _buildQuickActionItem(
-                        icon: Icons.chat_bubble_outline,
-                        iconColor: AppColors.black,
-                        label: '$_commentsCount Comments',
-                        onTap: () {
-                          Navigator.pop(context);
-                          _showCommentsBottomSheet();
-                        },
-                      ),
-                      // Favorite Action
-                      _buildQuickActionItem(
-                        icon: _isFavorited
-                            ? Icons.bookmark
-                            : Icons.bookmark_border,
-                        iconColor: _isFavorited
-                            ? AppColors.coral
-                            : AppColors.black,
-                        label: _isFavorited ? 'Favorited' : 'Favorite',
-                        onTap: () async {
-                          await _toggleFavorite();
-                          setModalState(() {});
-                          setState(() {});
-                        },
-                      ),
-                      // Share Story Action
-                      _buildQuickActionItem(
-                        icon: Icons.share_outlined,
-                        iconColor: AppColors.black,
-                        label: 'Share Story',
-                        onTap: () async {
-                          Navigator.pop(builderContext);
-                          final currentUserId =
-                              AuthRepository().currentUser?.id;
-                          if (currentUserId == null) {
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('Please log in first.'),
-                              ),
-                            );
-                            return;
-                          }
-                          _performStoryUpload(context, messenger, () async {
-                            await StoryRepository().createStory(
-                              userId: currentUserId,
-                              artworkId: widget.artwork.id,
-                              mediaUrl: widget.artwork.imageUrl,
-                            );
-                          });
-                        },
-                      ),
-                    ],
+                  
+                  // Actions List
+                  _buildListActionItem(
+                    icon: _isLiked ? Icons.favorite : Icons.favorite_border,
+                    iconColor: _isLiked ? AppColors.coral : AppColors.black,
+                    title: _isLiked ? 'Unlike' : 'Like',
+                    trailingText: _likesCount > 0 ? NumberUtils.format(_likesCount) : null,
+                    onTap: () async {
+                      await _toggleLike();
+                      setModalState(() {});
+                      setState(() {});
+                    },
                   ),
-                  const SizedBox(height: 12),
+                  _buildListActionItem(
+                    icon: Icons.chat_bubble_outline,
+                    iconColor: AppColors.black,
+                    title: 'Comment',
+                    trailingText: _commentsCount > 0 ? NumberUtils.format(_commentsCount) : null,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showCommentsBottomSheet();
+                    },
+                  ),
+                  _buildListActionItem(
+                    icon: _isFavorited ? Icons.bookmark : Icons.bookmark_border,
+                    iconColor: _isFavorited ? AppColors.coral : AppColors.black,
+                    title: _isFavorited ? 'Remove from Favorites' : 'Add to Favorites',
+                    trailingText: _favoritesCount > 0 ? NumberUtils.format(_favoritesCount) : null,
+                    onTap: () async {
+                      await _toggleFavorite();
+                      setModalState(() {});
+                      setState(() {});
+                    },
+                  ),
+                  _buildListActionItem(
+                    icon: Icons.share_outlined,
+                    iconColor: AppColors.black,
+                    title: 'Share to Story',
+                    onTap: () async {
+                      Navigator.pop(builderContext);
+                      final currentUserId = AuthRepository().currentUser?.id;
+                      if (currentUserId == null) {
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Please log in first.')),
+                        );
+                        return;
+                      }
+                      _performStoryUpload(context, messenger, () async {
+                        await StoryRepository().createStory(
+                          userId: currentUserId,
+                          artworkId: widget.artwork.id,
+                          mediaUrl: widget.artwork.imageUrl,
+                        );
+                      });
+                    },
+                  ),
+                  SizedBox(height: MediaQuery.of(sheetContext).padding.bottom + 24),
                 ],
               ),
+              ],
             );
           },
         );
@@ -529,45 +590,41 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
     );
   }
 
-  Widget _buildQuickActionItem({
+  Widget _buildListActionItem({
     required IconData icon,
     required Color iconColor,
-    required String label,
+    required String title,
+    String? trailingText,
     required VoidCallback onTap,
   }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.creamLight,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.lightGrey, width: 1),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 28),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 18,
                   fontWeight: FontWeight.w600,
+                  color: iconColor == AppColors.coral ? AppColors.coral : AppColors.black,
+                ),
+              ),
+            ),
+            if (trailingText != null)
+              Text(
+                trailingText,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                   color: AppColors.black,
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -717,159 +774,150 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => context.push('/artwork/${widget.artwork.id}'),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Stack(
-          children: [
-            CachedNetworkImage(
-              imageUrl: ImageUtils.getThumbnailUrl(widget.artwork.imageUrl, width: 400, height: (400 / widget.aspectRatio).round()),
-              memCacheWidth: 400,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => AspectRatio(
-                aspectRatio: widget.aspectRatio,
-                child: Container(color: AppColors.creamDark),
-              ),
-              errorWidget: (context, url, error) => AspectRatio(
-                aspectRatio: widget.aspectRatio,
-                child: Container(
-                  color: AppColors.creamDark,
-                  child: const Icon(
-                    Icons.broken_image,
-                    color: AppColors.darkGrey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(
+              children: [
+                CachedNetworkImage(
+                  imageUrl: ImageUtils.getThumbnailUrl(widget.artwork.imageUrl, width: 400, height: (400 / widget.aspectRatio).round()),
+                  memCacheWidth: 400,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => AspectRatio(
+                    aspectRatio: widget.aspectRatio,
+                    child: Container(color: AppColors.creamDark),
                   ),
-                ),
-              ),
-            ),
-
-            // Bottom overlay gradient so text is readable
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 60,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.5)],
-                  ),
-                ),
-              ),
-            ),
-
-            // Top-right Likes Count / Badge
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isLiked ? Icons.favorite : Icons.favorite_border,
-                      color: _isLiked ? AppColors.coral : AppColors.creamLight,
-                      size: 12,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$_likesCount',
-                      style: const TextStyle(
-                        color: AppColors.creamLight,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                  errorWidget: (context, url, error) => AspectRatio(
+                    aspectRatio: widget.aspectRatio,
+                    child: Container(
+                      color: AppColors.creamDark,
+                      child: const Icon(
+                        Icons.broken_image,
+                        color: AppColors.darkGrey,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Top-left Three-dot Actions button
-            Positioned(
-              top: 8,
-              left: 8,
-              child: GestureDetector(
-                onTap: _showQuickActionsBottomSheet,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppColors.black.withOpacity(0.4),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.more_horiz,
-                    color: AppColors.creamLight,
-                    size: 14,
                   ),
                 ),
-              ),
-            ),
 
-            // Author Avatar & Handle
-            Positioned(
-              bottom: 8,
-              left: 8,
-              right: 8,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 10,
-                    backgroundImage:
-                        widget.artwork.authorAvatarUrl != null &&
-                            widget.artwork.authorAvatarUrl!.isNotEmpty
-                        ? CachedNetworkImageProvider(
-                            widget.artwork.authorAvatarUrl!,
-                          )
-                        : null,
-                    child:
-                        widget.artwork.authorAvatarUrl == null ||
-                            widget.artwork.authorAvatarUrl!.isEmpty
-                        ? const Icon(
-                            Icons.person,
-                            size: 8,
-                            color: AppColors.black,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      widget.artwork.authorUsername != null
-                          ? (widget.artwork.userId == widget.currentUserId
-                                ? '@${widget.artwork.authorUsername} (You)'
-                                : '@${widget.artwork.authorUsername}')
-                          : '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.creamLight,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            blurRadius: 4.0,
-                            color: Colors.black,
-                            offset: Offset(0, 1),
+                // Top-right Likes Count / Badge
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.black.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _isLiked ? Icons.favorite : Icons.favorite_border,
+                          color: _isLiked ? AppColors.coral : AppColors.creamLight,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$_likesCount',
+                          style: const TextStyle(
+                            color: AppColors.creamLight,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (_isFavorited) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.bookmark, color: Colors.amber, size: 14),
-                  ],
-                ],
-              ),
+                ),
+                // Bottom-left Author Info Overlay
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (widget.artwork.userId.isNotEmpty) {
+                        context.push('/profile/${widget.artwork.userId}');
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundColor: Colors.white24,
+                          backgroundImage:
+                              widget.artwork.authorAvatarUrl != null &&
+                                      widget.artwork.authorAvatarUrl!.isNotEmpty
+                                  ? CachedNetworkImageProvider(
+                                      widget.artwork.authorAvatarUrl!,
+                                    )
+                                  : null,
+                          child: widget.artwork.authorAvatarUrl == null ||
+                                  widget.artwork.authorAvatarUrl!.isEmpty
+                              ? const Icon(
+                                  Icons.person,
+                                  size: 14,
+                                  color: AppColors.creamBg,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            widget.artwork.authorUsername != null
+                                ? (widget.artwork.userId == widget.currentUserId
+                                    ? '@${widget.artwork.authorUsername} (You)'
+                                    : '@${widget.artwork.authorUsername}')
+                                : '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.creamLight,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              shadows: [
+                                Shadow(
+                                  offset: Offset(0, 1),
+                                  blurRadius: 3.0,
+                                  color: Colors.black87,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          
+          // Below Image: 3 dots and Favorite icon (Compact layout)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_isFavorited)
+                const Icon(Icons.bookmark, color: AppColors.coral, size: 18),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _showQuickActionsBottomSheet,
+                child: const Padding(
+                  padding: EdgeInsets.only(top: 2.0, bottom: 0.0, left: 4.0, right: 2.0),
+                  child: Icon(
+                    Icons.more_horiz,
+                    color: AppColors.black,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

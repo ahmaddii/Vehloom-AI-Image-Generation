@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -38,10 +39,21 @@ class _ProfileScreenState extends State<ProfileScreen>
   late final String _targetUserId;
   late final bool _isMe;
   RealtimeChannel? _profileChannel;
+  final ScrollController _scrollController = ScrollController();
+  bool _isHeaderScrolledOut = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(() {
+      final isScrolledOut = _scrollController.offset > 250;
+      if (isScrolledOut != _isHeaderScrolledOut) {
+        setState(() {
+          _isHeaderScrolledOut = isScrolledOut;
+        });
+      }
+    });
+
     _tabController = TabController(length: 2, vsync: this);
 
     _targetUserId = widget.userId ?? _currentUserId;
@@ -53,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _tabController.dispose();
     final channel = _profileChannel;
     if (channel != null) {
@@ -143,12 +156,22 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Parallel execution
       await Future.wait([
         ProfileRepository().getProfile(_targetUserId).then((v) => profile = v),
-        ArtworkRepository().fetchUserArtworks(_targetUserId).then((v) => artworks = v),
-        ArtworkRepository().fetchUserFavorites(_targetUserId).then((v) => favoritedArtworks = v),
-        SocialRepository().fetchFollowers(_targetUserId).then((v) => followers = v),
-        SocialRepository().fetchFollowing(_targetUserId).then((v) => following = v),
+        ArtworkRepository()
+            .fetchUserArtworks(_targetUserId)
+            .then((v) => artworks = v),
+        ArtworkRepository()
+            .fetchUserFavorites(_targetUserId)
+            .then((v) => favoritedArtworks = v),
+        SocialRepository()
+            .fetchFollowers(_targetUserId)
+            .then((v) => followers = v),
+        SocialRepository()
+            .fetchFollowing(_targetUserId)
+            .then((v) => following = v),
         if (!_isMe && _currentUserId.isNotEmpty)
-          SocialRepository().isFollowing(_currentUserId, _targetUserId).then((v) => isFollowing = v),
+          SocialRepository()
+              .isFollowing(_currentUserId, _targetUserId)
+              .then((v) => isFollowing = v),
       ]);
 
       if (mounted) {
@@ -217,9 +240,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           Text(
             count,
             style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.black,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: AppColors.creamLight,
             ),
           ),
           const SizedBox(height: 2),
@@ -227,10 +250,35 @@ class _ProfileScreenState extends State<ProfileScreen>
             label,
             style: TextStyle(
               fontSize: 12,
-              color: AppColors.black.withOpacity(0.4),
+              fontWeight: FontWeight.w600,
+              color: AppColors.creamLight.withOpacity(0.6),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(String label, bool isPrimary, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isPrimary
+              ? AppColors.coral
+              : AppColors.creamLight.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.creamLight,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }
@@ -249,293 +297,325 @@ class _ProfileScreenState extends State<ProfileScreen>
     _loadProfileData();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.creamBg,
-      appBar: AppBar(
-        title: Text(
-          _profile != null ? '@${_profile!.username}' : 'Profile',
-          style: const TextStyle(
-            color: AppColors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+  Widget _buildGrid(List<ArtworkModel> artworks) {
+    if (artworks.isEmpty) {
+      return const Center(
+        child: Text(
+          'No posts yet.',
+          style: TextStyle(color: AppColors.darkGrey),
         ),
-        centerTitle: false,
-        actions: [
-          if (_isMe) ...[
-            IconButton(
-              icon: const Icon(Icons.logout, color: AppColors.coral),
-              tooltip: 'Sign Out',
-              onPressed: _signOut,
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined, color: AppColors.black),
-              onPressed: () => context.push('/settings'),
-            ),
-          ],
-        ],
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 0.75, // Tall cards like the screenshot
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.coral),
-            )
-          : _profile == null
-          ? const Center(
-              child: Text(
-                'Profile not found',
-                style: TextStyle(
-                  color: AppColors.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            )
-          : Column(
+      itemCount: artworks.length,
+      itemBuilder: (context, index) {
+        final artwork = artworks[index];
+        return GestureDetector(
+          onTap: () => context.push('/artwork/${artwork.id}'),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                // Profile Details Area
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
+                CachedNetworkImage(
+                  imageUrl: ImageUtils.getThumbnailUrl(
+                    artwork.imageUrl,
+                    width: 400,
+                    height: (400 / 0.75).round(),
                   ),
-                  child: Column(
-                    children: [
-                      // Circular Avatar with Coral Border
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.coral, width: 2),
-                        ),
-                        child: CircleAvatar(
-                          radius: 46,
-                          backgroundImage:
-                              _profile!.avatarUrl != null &&
-                                  _profile!.avatarUrl!.isNotEmpty
-                              ? CachedNetworkImageProvider(_profile!.avatarUrl!)
-                              : null,
-                          child:
-                              _profile!.avatarUrl == null ||
-                                  _profile!.avatarUrl!.isEmpty
-                              ? const Icon(
-                                  Icons.person,
-                                  size: 46,
-                                  color: AppColors.black,
-                                )
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Display Name & Bio
-                      Text(
-                        _profile!.displayName ?? _profile!.username,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _profile!.bio != null && _profile!.bio!.isNotEmpty
-                            ? _profile!.bio!
-                            : 'No bio yet ✦',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.black.withOpacity(0.5),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildStatColumn(NumberUtils.format(_artworks.length), 'Posts'),
-                          _buildStatColumn(
-                            NumberUtils.format(_followersCount),
-                            'Followers',
-                            onTap: () => _showSocialList(true),
-                          ),
-                          _buildStatColumn(
-                            NumberUtils.format(_followingCount),
-                            'Following',
-                            onTap: () => _showSocialList(false),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Action Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: _isMe
-                            ? OutlinedButton(
-                                onPressed: () async {
-                                  await context.push('/edit-profile');
-                                  _loadProfileData(); // Reload profile updates when returning
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  side: const BorderSide(
-                                    color: AppColors.black,
-                                    width: 1.5,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
-                                  backgroundColor: AppColors.creamLight,
-                                ),
-                                child: const Text(
-                                  'Edit Profile',
-                                  style: TextStyle(
-                                    color: AppColors.black,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              )
-                            : ElevatedButton(
-                                onPressed: _toggleFollow,
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  backgroundColor: _isFollowing
-                                      ? AppColors.creamDark
-                                      : AppColors.black,
-                                  foregroundColor: _isFollowing
-                                      ? AppColors.black
-                                      : AppColors.creamLight,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
-                                ),
-                                child: Text(
-                                  _isFollowing ? 'Following' : 'Follow',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ],
+                  memCacheWidth: 400,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      Container(color: AppColors.darkGrey),
+                  errorWidget: (context, url, error) => Container(
+                    color: AppColors.darkGrey,
+                    child: const Icon(
+                      Icons.broken_image,
+                      color: Colors.white24,
+                    ),
                   ),
                 ),
-
-                // Tab bar (Grid / Saved)
-                TabBar(
-                  controller: _tabController,
-                  indicatorColor: AppColors.black,
-                  indicatorWeight: 2,
-                  labelColor: AppColors.black,
-                  unselectedLabelColor: AppColors.black.withOpacity(0.3),
-                  tabs: const [
-                    Tab(icon: Icon(Icons.grid_on_outlined)),
-                    Tab(icon: Icon(Icons.bookmark_border)),
-                  ],
+                // Gradient for text readability
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.8),
+                      ],
+                      begin: Alignment.center,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
                 ),
-
-                // Tab Views
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      // Artworks Grid
-                      _artworks.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No artworks posted yet.',
-                                style: TextStyle(color: AppColors.darkGrey),
-                              ),
-                            )
-                          : GridView.builder(
-                              padding: const EdgeInsets.all(2),
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3,
-                                    crossAxisSpacing: 2,
-                                    mainAxisSpacing: 2,
-                                  ),
-                              itemCount: _artworks.length,
-                              itemBuilder: (context, index) {
-                                final artwork = _artworks[index];
-                                return GestureDetector(
-                                  onTap: () =>
-                                      context.push('/artwork/${artwork.id}'),
-                                  child: CachedNetworkImage(
-                                    imageUrl: ImageUtils.getThumbnailUrl(artwork.imageUrl, width: 400, height: 400),
-                                    memCacheWidth: 400,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) =>
-                                        Container(color: AppColors.creamDark),
-                                    errorWidget: (context, url, error) =>
-                                        Container(
-                                          color: AppColors.creamDark,
-                                          child: const Icon(
-                                            Icons.broken_image,
-                                            color: AppColors.darkGrey,
-                                          ),
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-
-                      // Saved Tab (Actual Favorites Grid)
-                      _favoritedArtworks.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No saved artworks yet.',
-                                style: TextStyle(color: AppColors.darkGrey),
-                              ),
-                            )
-                          : GridView.builder(
-                              padding: const EdgeInsets.all(2),
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3,
-                                    crossAxisSpacing: 2,
-                                    mainAxisSpacing: 2,
-                                  ),
-                              itemCount: _favoritedArtworks.length,
-                              itemBuilder: (context, index) {
-                                final artwork = _favoritedArtworks[index];
-                                return GestureDetector(
-                                  onTap: () =>
-                                      context.push('/artwork/${artwork.id}'),
-                                  child: CachedNetworkImage(
-                                    imageUrl: ImageUtils.getThumbnailUrl(artwork.imageUrl, width: 400, height: 400),
-                                    memCacheWidth: 400,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) =>
-                                        Container(color: AppColors.creamDark),
-                                    errorWidget: (context, url, error) =>
-                                        Container(
-                                          color: AppColors.creamDark,
-                                          child: const Icon(
-                                            Icons.broken_image,
-                                            color: AppColors.darkGrey,
-                                          ),
-                                        ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ],
+                // Title
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 16,
+                  child: Text(
+                    artwork.description != null &&
+                            artwork.description!.isNotEmpty
+                        ? artwork.description!
+                        : 'Untitled',
+                    style: const TextStyle(
+                      color: AppColors.creamLight,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
+          ),
+        );
+      },
+    );
+  }
 
-      // Bottom Navigation Bar
-      bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: _isHeaderScrolledOut
+          ? SystemUiOverlayStyle.dark
+          : SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.creamBg,
+        body: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.coral),
+              )
+            : _profile == null
+            ? const Center(
+                child: Text(
+                  'Profile not found',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            : NestedScrollView(
+                controller: _scrollController,
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    SliverToBoxAdapter(
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: AppColors.black,
+                          borderRadius: BorderRadius.only(
+                            bottomLeft: Radius.circular(40),
+                            bottomRight: Radius.circular(40),
+                          ),
+                        ),
+                        padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top + 16,
+                          bottom: 32,
+                          left: 24,
+                          right: 24,
+                        ),
+                        child: Column(
+                          children: [
+                            // Top Nav
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    if (context.canPop()) {
+                                      context.pop();
+                                    } else {
+                                      context.go('/');
+                                    }
+                                  },
+                                  child: const Icon(
+                                    Icons.arrow_back,
+                                    color: AppColors.creamLight,
+                                  ),
+                                ),
+                                if (_isMe)
+                                  GestureDetector(
+                                    onTap: () => context.push('/settings'),
+                                    child: const Icon(
+                                      Icons.tune,
+                                      color: AppColors.creamLight,
+                                    ),
+                                  )
+                                else
+                                  const SizedBox(width: 24),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            // Profile Info Row
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Large squircle avatar
+                                Container(
+                                  width: 90,
+                                  height: 90,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(28),
+                                    color: AppColors.darkGrey,
+                                    image:
+                                        _profile!.avatarUrl != null &&
+                                            _profile!.avatarUrl!.isNotEmpty
+                                        ? DecorationImage(
+                                            image: CachedNetworkImageProvider(
+                                              _profile!.avatarUrl!,
+                                            ),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child:
+                                      _profile!.avatarUrl == null ||
+                                          _profile!.avatarUrl!.isEmpty
+                                      ? const Icon(
+                                          Icons.person,
+                                          size: 40,
+                                          color: AppColors.creamLight,
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 20),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _profile!.displayName ??
+                                            _profile!.username,
+                                        style: const TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppColors.creamLight,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '@${_profile!.username}',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.creamLight
+                                              .withOpacity(0.6),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      // Action Buttons
+                                      Row(
+                                        children: [
+                                          if (_isMe)
+                                            Expanded(
+                                              child: _buildActionButton(
+                                                'Edit Profile',
+                                                true,
+                                                () async {
+                                                  await context.push(
+                                                    '/edit-profile',
+                                                  );
+                                                  _loadProfileData();
+                                                },
+                                              ),
+                                            )
+                                          else ...[
+                                            Expanded(
+                                              child: _buildActionButton(
+                                                _isFollowing
+                                                    ? 'Following'
+                                                    : 'Follow',
+                                                !_isFollowing,
+                                                _toggleFollow,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: _buildActionButton(
+                                                'Sign Out',
+                                                false,
+                                                _signOut,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            // Stats Row inside top card
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _buildStatColumn(
+                                  NumberUtils.format(_artworks.length),
+                                  'Posts',
+                                ),
+                                _buildStatColumn(
+                                  NumberUtils.format(_followersCount),
+                                  'Followers',
+                                  onTap: () => _showSocialList(true),
+                                ),
+                                _buildStatColumn(
+                                  NumberUtils.format(_followingCount),
+                                  'Following',
+                                  onTap: () => _showSocialList(false),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _SliverAppBarDelegate(
+                        tabBar: TabBar(
+                          controller: _tabController,
+                          indicatorColor: AppColors.black,
+                          indicatorWeight: 2,
+                          labelColor: AppColors.black,
+                          unselectedLabelColor: AppColors.darkGrey,
+                          dividerColor: AppColors.lightGrey,
+                          tabs: const [
+                            Tab(icon: Icon(Icons.grid_on_outlined)),
+                            Tab(icon: Icon(Icons.bookmark_border)),
+                          ],
+                        ),
+                        topPadding: MediaQuery.of(context).padding.top,
+                      ),
+                    ),
+                  ];
+                },
+                body: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildGrid(_artworks),
+                    _buildGrid(_favoritedArtworks),
+                  ],
+                ),
+              ),
+
+        // Bottom Navigation Bar
+        bottomNavigationBar: const AppBottomNavBar(currentIndex: 4),
+      ),
     );
   }
 }
@@ -710,5 +790,35 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
         ],
       ),
     );
+  }
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate({required this.tabBar, required this.topPadding});
+
+  final TabBar tabBar;
+  final double topPadding;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height + topPadding;
+  @override
+  double get maxExtent => tabBar.preferredSize.height + topPadding;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: AppColors.creamBg, // The background color behind tabs
+      padding: EdgeInsets.only(top: topPadding),
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return oldDelegate.topPadding != topPadding || oldDelegate.tabBar != tabBar;
   }
 }

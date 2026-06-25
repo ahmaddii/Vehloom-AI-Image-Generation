@@ -312,10 +312,10 @@ class _SignupScreenState extends State<SignupScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.apple, color: AppColors.black, size: 20),
+                      Icon(Icons.facebook, color: AppColors.black, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Continue with Apple',
+                        'Continue with FaceBook',
                         style: TextStyle(
                           color: AppColors.black,
                           fontWeight: FontWeight.w600,

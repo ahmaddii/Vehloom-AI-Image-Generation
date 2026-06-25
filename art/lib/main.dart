@@ -14,8 +14,8 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness:
-          Brightness.dark, // Dark icons for light app background
+      statusBarIconBrightness: Brightness.dark, // Android: Dark icons
+      statusBarBrightness: Brightness.light, // iOS: Dark icons
     ),
   );
   await dotenv.load(fileName: ".env");

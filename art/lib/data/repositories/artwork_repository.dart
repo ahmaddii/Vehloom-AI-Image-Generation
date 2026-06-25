@@ -17,7 +17,7 @@ class ArtworkRepository {
       final response = await _client
           .from('artworks')
           .select(
-            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
           )
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
@@ -39,7 +39,7 @@ class ArtworkRepository {
       final response = await _client
           .from('artworks')
           .select(
-            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
           )
           .eq('user_id', userId)
           .order('created_at', ascending: false)
@@ -58,7 +58,7 @@ class ArtworkRepository {
       final response = await _client
           .from('artworks')
           .select(
-            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
           )
           .eq('id', id)
           .maybeSingle();
@@ -221,7 +221,7 @@ class ArtworkRepository {
       final response = await _client
           .from('favorites')
           .select(
-            'artworks(*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count))',
+            'artworks(*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count))',
           )
           .eq('user_id', userId)
           .order('created_at', ascending: false);
@@ -243,7 +243,7 @@ class ArtworkRepository {
       final response = await _client
           .from('artworks')
           .select(
-            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
           )
           .or('title.ilike.%$cleanQuery%,description.ilike.%$cleanQuery%')
           .order('created_at', ascending: false)
@@ -264,7 +264,7 @@ class ArtworkRepository {
       final response = await _client
           .from('artworks')
           .select(
-            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
           )
           .order('created_at', ascending: false)
           .limit(100);
@@ -288,7 +288,7 @@ class ArtworkRepository {
       final response = await _client
           .from('artworks')
           .select(
-            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count)',
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
           )
           .order('created_at', ascending: false)
           .limit(100);

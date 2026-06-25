@@ -7,7 +7,7 @@ class AppColors {
   static const Color creamDark = Color(0xFFEDE9E0); // Input fill color
 
   // Primary Black
-  static const Color black = Color(0xFF111111);
+  static const Color black = Color(0xFF1E1B15);
   static const Color darkGrey = Color(0xFF2A2A2A);
   static const Color lightGrey = Color(0xFFEBE6DD);
 
