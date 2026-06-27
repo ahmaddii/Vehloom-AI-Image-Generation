@@ -40,8 +40,8 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
     _scrollController = ScrollController();
     _ticker = createTicker((elapsed) {
       if (_scrollController.hasClients) {
-        // Scroll exactly 30 pixels per second regardless of frame rate
-        final double targetOffset = elapsed.inMicroseconds * (30.0 / 1000000.0);
+        // Scroll exactly 10 pixels per second regardless of frame rate
+        final double targetOffset = elapsed.inMicroseconds * (10.0 / 1000000.0);
         _scrollController.jumpTo(targetOffset);
       }
     });
@@ -71,33 +71,36 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
           children: [
             // Top Grid of Images
             Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: MediaQuery.of(context).size.height * 0.65,
-              child: GridView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.only(top: 50, left: 16, right: 16),
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.9,
-                ),
-                itemBuilder: (context, index) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      image: DecorationImage(
-                        image: AssetImage(
-                          _nftImages[index % _nftImages.length],
+              top: -80,
+              left: -50,
+              right: -50,
+              height: MediaQuery.of(context).size.height * 0.8,
+              child: Transform.rotate(
+                angle: -0.15,
+                child: GridView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.only(top: 50, left: 16, right: 16),
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.9,
+                  ),
+                  itemBuilder: (context, index) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        image: DecorationImage(
+                          image: AssetImage(
+                            _nftImages[index % _nftImages.length],
+                          ),
+                          fit: BoxFit.cover,
                         ),
-                        fit: BoxFit.cover,
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
 
@@ -213,7 +216,7 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                                           const Duration(milliseconds: 200),
                                           () {
                                             if (!context.mounted) return;
-                                            context.go('/signup');
+                                            context.go('/auth-options');
                                           },
                                         );
                                       } else {

@@ -48,7 +48,11 @@ class CustomAddButton extends StatelessWidget {
                 color: AppColors.black,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.add, color: AppColors.creamLight, size: 24),
+              child: const Icon(
+                Icons.add,
+                color: AppColors.creamLight,
+                size: 24,
+              ),
             ),
           ),
         ],
