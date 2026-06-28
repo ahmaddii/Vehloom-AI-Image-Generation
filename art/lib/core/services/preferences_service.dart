@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../data/models/story_model.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PreferencesService extends ChangeNotifier {
@@ -19,7 +21,7 @@ class PreferencesService extends ChangeNotifier {
 
   // Current values (cached in memory)
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = false;
+  bool _darkModeEnabled = true; // Default to black theme
   bool _privateAccountEnabled = false;
   String _language = 'English';
 
@@ -31,12 +33,13 @@ class PreferencesService extends ChangeNotifier {
   Future<void> init() async {
     if (_isInitialized) return;
     _prefs = await SharedPreferences.getInstance();
-    
+
     _notificationsEnabled = _prefs.getBool(_keyNotifications) ?? true;
-    _darkModeEnabled = _prefs.getBool(_keyDarkMode) ?? false;
+    _darkModeEnabled =
+        _prefs.getBool(_keyDarkMode) ?? true; // Default to black theme
     _privateAccountEnabled = _prefs.getBool(_keyPrivateAccount) ?? false;
     _language = _prefs.getString(_keyLanguage) ?? 'English';
-    
+
     _isInitialized = true;
     notifyListeners();
   }
@@ -63,5 +66,40 @@ class PreferencesService extends ChangeNotifier {
     _language = value;
     await _prefs.setString(_keyLanguage, value);
     notifyListeners();
+  }
+
+  // Story viewed state
+  void markStoryViewed(String userId, DateTime createdAt) {
+    if (!_isInitialized) return;
+    final key = 'story_viewed_$userId';
+    final lastViewed = _prefs.getString(key);
+
+    // Only update if the new story is newer than the last viewed
+    if (lastViewed != null) {
+      final lastViewedDate = DateTime.parse(lastViewed);
+      if (createdAt.isBefore(lastViewedDate) ||
+          createdAt.isAtSameMomentAs(lastViewedDate)) {
+        return;
+      }
+    }
+
+    _prefs.setString(key, createdAt.toIso8601String());
+    notifyListeners();
+  }
+
+  bool hasUnviewedStories(String userId, List<StoryModel> stories) {
+    if (!_isInitialized || stories.isEmpty) return false;
+    final key = 'story_viewed_$userId';
+    final lastViewed = _prefs.getString(key);
+
+    if (lastViewed == null)
+      return true; // Never viewed any stories from this user
+
+    final lastViewedDate = DateTime.parse(lastViewed);
+    // If any story is strictly newer than lastViewedDate, return true
+    for (var story in stories) {
+      if (story.createdAt.isAfter(lastViewedDate)) return true;
+    }
+    return false;
   }
 }

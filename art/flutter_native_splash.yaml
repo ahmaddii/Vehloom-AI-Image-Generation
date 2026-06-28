@@ -1,0 +1,16 @@
+flutter_native_splash:
+  color: "#1E1B15"
+  image: "assets/native_splashlogo/SplashLogo.png"
+  
+  android: true
+  ios: true
+
+  # Set the android splash screen to be valid in dark mode as well (we just use the same color)
+  color_dark: "#1E1B15"
+  image_dark: "assets/native_splashlogo/SplashLogo.png"
+  
+  android_12:
+    color: "#1E1B15"
+    image: "assets/native_splashlogo/SplashLogo.png"
+    color_dark: "#1E1B15"
+    image_dark: "assets/native_splashlogo/SplashLogo.png"

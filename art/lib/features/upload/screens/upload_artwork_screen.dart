@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/custom_animated_switch.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/story_repository.dart';
@@ -218,18 +219,18 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.creamBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           'Discard post?',
           style: TextStyle(color: AppColors.black, fontWeight: FontWeight.w800),
         ),
-        content: const Text(
+        content: Text(
           'Your selected artwork, text, and tags will be lost.',
           style: TextStyle(color: AppColors.darkGrey, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text(
+            child: Text(
               'Keep editing',
               style: TextStyle(
                 color: AppColors.black,
@@ -268,7 +269,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.creamBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text(
+        title: Text(
           'Add New Tag',
           style: TextStyle(
             color: AppColors.black,
@@ -279,7 +280,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: AppColors.black),
+          style: TextStyle(color: AppColors.black),
           decoration: InputDecoration(
             hintText: 'e.g. digitalart',
             hintStyle: TextStyle(color: AppColors.black.withOpacity(0.3)),
@@ -291,7 +292,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.lightGrey),
+              borderSide: BorderSide(color: AppColors.lightGrey),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -352,7 +353,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.lightGrey),
+        borderSide: BorderSide(color: AppColors.lightGrey),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
@@ -370,6 +371,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       extendBodyBehindAppBar: true,
@@ -379,17 +381,17 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.creamLight,
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: const Icon(Icons.close, color: AppColors.black, size: 18),
+              icon: Icon(Icons.close, color: AppColors.black, size: 18),
               onPressed: _isUploading ? null : _closeScreen,
             ),
           ),
         ),
-        title: const Text(
+        title: Text(
           'New Post',
           style: TextStyle(
             color: AppColors.black,
@@ -527,7 +529,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                                           horizontal: 12,
                                           vertical: 8,
                                         ),
-                                        child: const Row(
+                                        child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
@@ -548,7 +550,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                                         ),
                                       ),
                                     ),
-                                    const Positioned(
+                                    Positioned(
                                       left: 18,
                                       right: 18,
                                       bottom: 18,
@@ -644,7 +646,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                                                 ),
                                               ),
                                               const SizedBox(height: 18),
-                                              const Text(
+                                              Text(
                                                 'Choose your artwork',
                                                 style: TextStyle(
                                                   color: AppColors.black,
@@ -675,7 +677,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
 
                     const SizedBox(height: 24),
 
-                    const Text(
+                    Text(
                       'DETAILS',
                       style: TextStyle(
                         fontSize: 11,
@@ -689,7 +691,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                     TextFormField(
                       controller: _titleController,
                       enabled: !_isUploading,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.black,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -708,7 +710,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                       enabled: !_isUploading,
                       minLines: 3,
                       maxLines: 5,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.black,
                         fontSize: 15,
                         height: 1.35,
@@ -722,7 +724,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                     const SizedBox(height: 24),
 
                     // Tags Label
-                    const Text(
+                    Text(
                       'TAGS',
                       style: TextStyle(
                         fontSize: 11,
@@ -772,7 +774,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
 
                         // Add Tag Button
                         ActionChip(
-                          label: const Row(
+                          label: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.add, size: 14, color: AppColors.black),
@@ -798,7 +800,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
 
                     const SizedBox(height: 16),
 
-                    const Text(
+                    Text(
                       'SUGGESTED',
                       style: TextStyle(
                         fontSize: 11,
@@ -857,7 +859,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
 
                     const SizedBox(height: 24),
 
-                    const Text(
+                    Text(
                       'SHARING OPTIONS',
                       style: TextStyle(
                         fontSize: 11,
@@ -874,8 +876,15 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: AppColors.lightGrey),
                       ),
-                      child: SwitchListTile(
-                        title: const Text(
+                      child: ListTile(
+                        onTap: _isUploading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _alsoPostToStory = !_alsoPostToStory;
+                                });
+                              },
+                        title: Text(
                           'Also post to Story',
                           style: TextStyle(
                             color: AppColors.black,
@@ -883,23 +892,26 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
                             fontSize: 14,
                           ),
                         ),
-                        subtitle: const Text(
+                        subtitle: Text(
                           'Followers will see this artwork on your active stories for 24 hours.',
                           style: TextStyle(
                             color: AppColors.darkGrey,
                             fontSize: 11,
                           ),
                         ),
-                        activeColor: AppColors.coral,
-                        activeTrackColor: AppColors.coral.withOpacity(0.3),
-                        value: _alsoPostToStory,
-                        onChanged: _isUploading
-                            ? null
-                            : (val) {
-                                setState(() {
-                                  _alsoPostToStory = val;
-                                });
-                              },
+                        trailing: CustomAnimatedSwitch(
+                          value: _alsoPostToStory,
+                          activeColor: AppColors.coral,
+                          activeIcon: Icons.auto_awesome,
+                          inactiveIcon: Icons.circle_outlined,
+                          onChanged: _isUploading
+                              ? (val) {}
+                              : (val) {
+                                  setState(() {
+                                    _alsoPostToStory = val;
+                                  });
+                                },
+                        ),
                       ),
                     ),
 
@@ -910,7 +922,7 @@ class _UploadArtworkScreenState extends State<UploadArtworkScreen> {
               if (_isUploading)
                 Container(
                   color: Colors.black.withOpacity(0.3),
-                  child: const Center(
+                  child: Center(
                     child: Card(
                       color: AppColors.creamLight,
                       margin: EdgeInsets.all(32),

@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/preferences_service.dart';
 import '../../../data/repositories/auth_repository.dart';
 
 class OnboardingScreen3 extends StatefulWidget {
@@ -63,10 +64,11 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: PreferencesService().darkModeEnabled ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: AppColors.black,
+        backgroundColor: AppColors.creamBg,
         body: Stack(
           children: [
             // Top Grid of Images
@@ -112,11 +114,11 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      AppColors.black.withValues(alpha: 0.0),
-                      AppColors.black.withValues(alpha: 0.2),
-                      AppColors.black.withValues(alpha: 0.8),
-                      AppColors.black,
-                      AppColors.black,
+                      AppColors.creamBg.withValues(alpha: 0.0),
+                      AppColors.creamBg.withValues(alpha: 0.2),
+                      AppColors.creamBg.withValues(alpha: 0.8),
+                      AppColors.creamBg,
+                      AppColors.creamBg,
                     ],
                     stops: const [0.0, 0.35, 0.55, 0.7, 1.0],
                   ),
@@ -135,10 +137,10 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Explore\nInspire &\nConnect',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.black,
                         fontSize: 42,
                         fontWeight: FontWeight.w900,
                         height: 1.1,
@@ -146,10 +148,10 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Join a global community of artists.\nShare your masterpieces with the world.',
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.black.withValues(alpha: 0.7),
                         fontSize: 16,
                         height: 1.5,
                         fontWeight: FontWeight.w500,
@@ -169,7 +171,7 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                         return Container(
                           height: 72,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF2A2823),
+                            color: AppColors.creamLight,
                             borderRadius: BorderRadius.circular(36),
                           ),
                           child: Stack(
@@ -229,7 +231,7 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                                     width: capsuleWidth,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
+                                      color: AppColors.black,
                                       borderRadius: BorderRadius.circular(32),
                                       boxShadow: [
                                         BoxShadow(
@@ -241,10 +243,10 @@ class _OnboardingScreen3State extends State<OnboardingScreen3>
                                         ),
                                       ],
                                     ),
-                                    child: const Text(
+                                    child: Text(
                                       'Get Started',
                                       style: TextStyle(
-                                        color: AppColors.black,
+                                        color: AppColors.creamBg,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -297,6 +299,7 @@ class _AnimatedChevronsState extends State<AnimatedChevrons>
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -317,7 +320,7 @@ class _AnimatedChevronsState extends State<AnimatedChevrons>
 
             return Icon(
               Icons.chevron_right,
-              color: Colors.white.withValues(alpha: opacity.clamp(0.3, 1.0)),
+              color: AppColors.black.withValues(alpha: opacity.clamp(0.3, 1.0)),
               size: 24,
             );
           }),

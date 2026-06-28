@@ -164,7 +164,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Edit Profile',
           style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold),
         ),
@@ -182,7 +182,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 )
               : TextButton(
                   onPressed: _saveProfile,
-                  child: const Text(
+                  child: Text(
                     'Save',
                     style: TextStyle(
                       color: AppColors.black,
@@ -194,7 +194,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.coral))
+          ? Center(child: CircularProgressIndicator(color: AppColors.coral))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -220,7 +220,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       ? CachedNetworkImageProvider(_profile!.avatarUrl!)
                                       : null) as ImageProvider?,
                               child: _imageFile == null && (_profile?.avatarUrl == null || _profile!.avatarUrl!.isEmpty)
-                                  ? const Icon(Icons.person, size: 54, color: AppColors.black)
+                                  ? Icon(Icons.person, size: 54, color: AppColors.black)
                                   : null,
                             ),
                           ),
@@ -229,11 +229,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             right: 0,
                             child: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.black,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.camera_alt,
                                 color: AppColors.creamLight,
                                 size: 18,
@@ -262,7 +262,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: 24),
 
                   // Display Name field
-                  const Text(
+                  Text(
                     'Display Name',
                     style: TextStyle(
                       fontSize: 13,
@@ -280,15 +280,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.lightGrey),
+                        borderSide: BorderSide(color: AppColors.lightGrey),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.lightGrey),
+                        borderSide: BorderSide(color: AppColors.lightGrey),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.black, width: 1.5),
+                        borderSide: BorderSide(color: AppColors.black, width: 1.5),
                       ),
                     ),
                   ),
@@ -296,7 +296,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const SizedBox(height: 20),
 
                   // Bio field
-                  const Text(
+                  Text(
                     'Bio',
                     style: TextStyle(
                       fontSize: 13,
@@ -315,15 +315,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.lightGrey),
+                        borderSide: BorderSide(color: AppColors.lightGrey),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.lightGrey),
+                        borderSide: BorderSide(color: AppColors.lightGrey),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.black, width: 1.5),
+                        borderSide: BorderSide(color: AppColors.black, width: 1.5),
                       ),
                     ),
                   ),

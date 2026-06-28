@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../features/onboarding/screens/animated_splash_screen.dart';
 import '../../features/onboarding/screens/onboarding_screen_1.dart';
 import '../../features/onboarding/screens/onboarding_screen_2.dart';
 import '../../features/onboarding/screens/onboarding_screen_3.dart';
@@ -48,9 +49,7 @@ final _authRefresh = GoRouterRefreshStream(
 );
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: Supabase.instance.client.auth.currentSession == null
-      ? '/onboarding1'
-      : '/',
+  initialLocation: '/splash',
   refreshListenable: _authRefresh,
   observers: [homeRouteObserver],
   redirect: (context, state) {
@@ -63,12 +62,24 @@ final GoRouter appRouter = GoRouter(
     final isOnboardingRoute = location.startsWith('/onboarding');
 
     if (isLoggedIn && (isAuthRoute || isOnboardingRoute)) {
+      if (location == '/splash') return null; // Let splash play
       return '/';
+    }
+
+    // If not logged in, but trying to go home directly without splash
+    if (!isLoggedIn && location == '/') {
+      return '/onboarding1';
     }
 
     return null;
   },
   routes: [
+    // Splash
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const AnimatedSplashScreen(),
+    ),
+
     // Onboarding
     GoRoute(
       path: '/onboarding1',

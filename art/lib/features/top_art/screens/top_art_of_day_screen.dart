@@ -144,6 +144,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     final hasArt = _topArtworks.isNotEmpty;
     final topOne = hasArt ? _topArtworks.first : null;
     final restRankings = hasArt
@@ -158,7 +159,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         scrolledUnderElevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.black),
+          icon: Icon(Icons.arrow_back, color: AppColors.black),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -168,7 +169,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
             }
           },
         ),
-        title: const Text(
+        title: Text(
           'Top Art of the Day',
           style: TextStyle(
             color: AppColors.black,
@@ -179,7 +180,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.black),
+            icon: Icon(Icons.refresh, color: AppColors.black),
             onPressed: _loadTopArtworks,
           ),
         ],
@@ -206,7 +207,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                     vertical: 12, // Reduced from 16 to make it slightly thinner
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF0F0), // Light red
+                    color: AppColors.coral.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -292,7 +293,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Top Art of the Day',
           style: TextStyle(
             color: AppColors.black,
@@ -303,7 +304,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         elevation: 0,
         centerTitle: true,
       ),
-      body: const Center(
+      body: Center(
         child: Text(
           'No rankings available yet today.\nCheck back later!',
           textAlign: TextAlign.center,
@@ -324,7 +325,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
           child: Container(
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.creamLight,
               borderRadius: BorderRadius.circular(16),
             ),
           ),
@@ -337,7 +338,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
           child: Container(
             height: 350,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.creamLight,
               borderRadius: BorderRadius.circular(24),
             ),
           ),
@@ -354,7 +355,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
               child: Container(
                 height: 70,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.creamLight,
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
@@ -373,7 +374,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
       child: Container(
         height: isLandscape ? null : 220,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.creamLight,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -440,7 +441,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                     height: 20,
                   ),
                   const SizedBox(width: 6),
-                  const Text(
+                  Text(
                     '#1',
                     style: TextStyle(
                       fontSize: 22,
@@ -449,11 +450,11 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  const Icon(Icons.favorite, color: AppColors.coral, size: 18),
+                  Icon(Icons.favorite, color: AppColors.coral, size: 18),
                   const SizedBox(width: 4),
                   Text(
                     '${topOne.likesCount}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.black,
@@ -466,7 +467,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                 topOne.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 24, // Increased from 18
                   fontWeight: FontWeight.w900,
                   color: AppColors.black,
@@ -503,7 +504,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                           : 'user',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14, // Increased from 12
                         color: AppColors.darkGrey,
                         fontWeight: FontWeight.w600,
@@ -618,7 +619,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.creamLight,
             borderRadius: BorderRadius.circular(20),
             border: isTrending
                 ? Border.all(
@@ -679,7 +680,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                       artwork.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: AppColors.black,
@@ -772,7 +773,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.favorite_border,
                           color: AppColors.darkGrey,
                           size: 16,
@@ -780,7 +781,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                         const SizedBox(height: 2),
                         Text(
                           '${artwork.likesCount}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             color: AppColors.darkGrey,

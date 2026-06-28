@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/preferences_service.dart';
 
 class AuthOptionsScreen extends StatefulWidget {
   const AuthOptionsScreen({super.key});
@@ -122,14 +123,16 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Force a dark theme feel for this specific screen
-    final textColor = Colors.white;
+    // Dynamic theme colors
+    final textColor = AppColors.black;
     final primaryColor = Theme.of(context).colorScheme.primary;
-    const bgColor = AppColors.black;
-    const surfaceColor = Color(0xFF1E1E1E);
+    final bgColor = AppColors.creamBg;
+    final surfaceColor = AppColors.creamLight;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: PreferencesService().darkModeEnabled
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: bgColor,
         body: Stack(
@@ -184,12 +187,12 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      AppColors.black.withOpacity(0.0),
-                      AppColors.black.withOpacity(0.15),
-                      AppColors.black.withOpacity(0.4),
-                      AppColors.black.withOpacity(0.7),
-                      AppColors.black.withOpacity(0.95),
-                      AppColors.black,
+                      bgColor.withOpacity(0.0),
+                      bgColor.withOpacity(0.15),
+                      bgColor.withOpacity(0.4),
+                      bgColor.withOpacity(0.7),
+                      bgColor.withOpacity(0.95),
+                      bgColor,
                     ],
                     stops: const [0.0, 0.3, 0.45, 0.6, 0.75, 1.0],
                   ),
@@ -273,7 +276,7 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
                             child: _premiumButton(
                               height: 56,
                               backgroundColor: primaryColor,
-                              foregroundColor: Colors.white,
+                              foregroundColor: Colors.black,
                               icon: Icons.mail_outline_rounded,
                               label: 'Continue with Email',
                               onPressed: () => context.push('/signup'),

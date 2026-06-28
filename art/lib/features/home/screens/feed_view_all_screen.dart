@@ -175,11 +175,12 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       extendBodyBehindAppBar: false,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Feed',
           style: TextStyle(
             color: AppColors.black,
@@ -192,17 +193,17 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
         scrolledUnderElevation: 0,
         backgroundColor: AppColors.creamBg,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.black),
+          icon: Icon(Icons.arrow_back, color: AppColors.black),
           onPressed: () => context.pop(),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: AppColors.black, size: 28),
+            icon: Icon(Icons.search, color: AppColors.black, size: 28),
             onPressed: () {
               context.push('/search');
             },
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
         ],
       ),
       body: Container(
@@ -213,7 +214,7 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
               child: _isLoading
                   ? _buildSkeletonGrid()
                   : _artworks.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         'No artworks found',
                         style: TextStyle(
@@ -414,7 +415,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                 Positioned.fill(
                   top: 60, // The top 60px of the Stack is transparent for the image to stick out
                   child: Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.creamBg,
                       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                     ),
@@ -427,7 +428,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                   left: 16,
                   child: GestureDetector(
                     onTap: () => Navigator.pop(sheetContext),
-                    child: const Icon(Icons.close, color: AppColors.black, size: 28),
+                    child: Icon(Icons.close, color: AppColors.black, size: 28),
                   ),
                 ),
                 
@@ -479,7 +480,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                                 aspectRatio: widget.aspectRatio,
                                 child: Container(
                                   color: AppColors.creamDark,
-                                  child: const Icon(Icons.broken_image_outlined, color: AppColors.darkGrey, size: 40),
+                                  child: Icon(Icons.broken_image_outlined, color: AppColors.darkGrey, size: 40),
                                 ),
                               ),
                             ),
@@ -487,7 +488,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     
                   // Title and Description
                   Padding(
@@ -499,7 +500,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppColors.black,
@@ -507,13 +508,13 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                         ),
                         if (widget.artwork.description != null &&
                             widget.artwork.description!.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
                           Text(
                             widget.artwork.description!,
                             textAlign: TextAlign.center,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               color: AppColors.darkGrey,
                             ),
@@ -522,7 +523,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   
                   // Actions List
                   _buildListActionItem(
@@ -604,7 +605,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
         child: Row(
           children: [
             Icon(icon, color: iconColor, size: 28),
-            const SizedBox(width: 20),
+            SizedBox(width: 20),
             Expanded(
               child: Text(
                 title,
@@ -618,7 +619,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
             if (trailingText != null)
               Text(
                 trailingText,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: AppColors.black,
@@ -711,7 +712,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                           ),
                           Text(
                             '${(progress * 100).toInt()}%',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.black,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -719,8 +720,8 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      const Text(
+                      SizedBox(height: 20),
+                      Text(
                         'Sharing to Story...',
                         style: TextStyle(
                           color: AppColors.black,
@@ -793,7 +794,7 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                     aspectRatio: widget.aspectRatio,
                     child: Container(
                       color: AppColors.creamDark,
-                      child: const Icon(
+                      child: Icon(
                         Icons.broken_image,
                         color: AppColors.darkGrey,
                       ),
@@ -816,14 +817,14 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                       children: [
                         Icon(
                           _isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: _isLiked ? AppColors.coral : AppColors.creamLight,
+                          color: _isLiked ? AppColors.coral : Colors.white,
                           size: 12,
                         ),
-                        const SizedBox(width: 4),
+                        SizedBox(width: 4),
                         Text(
                           '$_likesCount',
-                          style: const TextStyle(
-                            color: AppColors.creamLight,
+                          style: TextStyle(
+                            color: Colors.white,
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -858,14 +859,14 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                                   : null,
                           child: widget.artwork.authorAvatarUrl == null ||
                                   widget.artwork.authorAvatarUrl!.isEmpty
-                              ? const Icon(
+                              ? Icon(
                                   Icons.person,
                                   size: 14,
                                   color: AppColors.creamBg,
                                 )
                               : null,
                         ),
-                        const SizedBox(width: 6),
+                        SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             widget.artwork.authorUsername != null
@@ -875,8 +876,8 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
                                 : '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.creamLight,
+                            style: TextStyle(
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               shadows: [
@@ -902,11 +903,11 @@ class _GridArtworkCardState extends State<GridArtworkCard> {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               if (_isFavorited)
-                const Icon(Icons.bookmark, color: AppColors.coral, size: 18),
+                Icon(Icons.bookmark, color: AppColors.coral, size: 18),
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _showQuickActionsBottomSheet,
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.only(top: 2.0, bottom: 0.0, left: 4.0, right: 2.0),
                   child: Icon(
                     Icons.more_horiz,
@@ -1036,7 +1037,7 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.creamBg,
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(20),
@@ -1064,17 +1065,17 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const SizedBox(width: 24),
+                SizedBox(width: 24),
                 Text(
                   'Comments ($_commentsCount)',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: AppColors.black,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.close,
                     size: 20,
                     color: AppColors.black,
@@ -1086,16 +1087,16 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
               ],
             ),
           ),
-          const Divider(height: 1, thickness: 0.5, color: AppColors.lightGrey),
+          Divider(height: 1, thickness: 0.5, color: AppColors.lightGrey),
 
           // Comments List
           Expanded(
             child: _isLoading
-                ? const Center(
+                ? Center(
                     child: CircularProgressIndicator(color: AppColors.coral),
                   )
                 : _comments.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No comments yet.',
                       style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
@@ -1128,14 +1129,14 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                               child:
                                   comment.authorAvatarUrl == null ||
                                       comment.authorAvatarUrl!.isEmpty
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.person,
                                       size: 15,
                                       color: AppColors.black,
                                     )
                                   : null,
                             ),
-                            const SizedBox(width: 10),
+                            SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1165,16 +1166,16 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                                           comment.authorUsername != null
                                               ? '@${comment.authorUsername}'
                                               : 'user',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: AppColors.coral,
                                             fontSize: 12.5,
                                           ),
                                         ),
-                                        const SizedBox(height: 3),
+                                        SizedBox(height: 3),
                                         Text(
                                           comment.content,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             color: AppColors.black,
                                             fontSize: 13.5,
                                             height: 1.25,
@@ -1183,7 +1184,7 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
+                                  SizedBox(height: 2),
                                   Padding(
                                     padding: const EdgeInsets.only(left: 4),
                                     child: Text(
@@ -1219,11 +1220,11 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                   Expanded(
                     child: TextField(
                       controller: _commentController,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.black,
                         fontSize: 14,
                       ),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'Add a comment...',
                         hintStyle: TextStyle(
                           color: AppColors.darkGrey,
@@ -1235,9 +1236,9 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   _isSubmittingComment
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
@@ -1246,12 +1247,12 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                           ),
                         )
                       : Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.black,
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.arrow_upward,
                               color: AppColors.creamLight,
                               size: 16,

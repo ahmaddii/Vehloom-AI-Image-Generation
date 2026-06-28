@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import '../../../core/widgets/custom_animated_switch.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -42,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return AlertDialog(
               backgroundColor: AppColors.creamBg,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text(
+              title: Text(
                 'Change Password',
                 style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold, fontSize: 18),
               ),
@@ -54,8 +56,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     TextFormField(
                       controller: newPasswordController,
                       obscureText: true,
-                      style: const TextStyle(color: AppColors.black),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: AppColors.black),
+                      decoration: InputDecoration(
                         labelText: 'New Password',
                         labelStyle: TextStyle(color: AppColors.darkGrey),
                         focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.coral)),
@@ -71,8 +73,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     TextFormField(
                       controller: confirmPasswordController,
                       obscureText: true,
-                      style: const TextStyle(color: AppColors.black),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: AppColors.black),
+                      decoration: InputDecoration(
                         labelText: 'Confirm Password',
                         labelStyle: TextStyle(color: AppColors.darkGrey),
                         focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.coral)),
@@ -90,7 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               actions: [
                 TextButton(
                   onPressed: isSubmitting ? null : () => Navigator.pop(context),
-                  child: const Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
+                  child: Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
                 ),
                 isSubmitting
                     ? const Padding(
@@ -182,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 24),
                         Text(
                           loadingSteps[deleteStep],
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.black,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
@@ -195,7 +197,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'This action cannot be undone. You will permanently lose:',
                           style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold),
                         ),
@@ -211,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
+                        child: Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
                       ),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -279,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const Icon(Icons.close, color: Colors.red, size: 16),
           const SizedBox(width: 8),
-          Text(text, style: const TextStyle(color: AppColors.black, fontSize: 14)),
+          Text(text, style: TextStyle(color: AppColors.black, fontSize: 14)),
         ],
       ),
     );
@@ -290,7 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.only(left: 16, top: 24, bottom: 8),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
           color: AppColors.darkGrey,
@@ -367,7 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildDivider() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.only(left: 52),
       child: Divider(color: AppColors.lightGrey, height: 1),
     );
@@ -386,12 +388,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.black, size: 16),
+              icon: Icon(Icons.arrow_back_ios_new, color: AppColors.black, size: 16),
               onPressed: () => context.pop(),
             ),
           ),
         ),
-        title: const Text(
+        title: Text(
           'Settings',
           style: TextStyle(
             color: AppColors.black,
@@ -434,12 +436,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildListTile(
                 icon: Icons.notifications_none_outlined,
                 title: 'Notifications',
-                trailingWidget: Switch(
+                trailingWidget: CustomAnimatedSwitch(
                   value: _notificationsEnabled,
-                  activeColor: AppColors.creamBg,
-                  activeTrackColor: AppColors.black,
-                  inactiveThumbColor: AppColors.darkGrey,
-                  inactiveTrackColor: AppColors.creamDark,
+                  activeColor: AppColors.coral,
+                  activeIcon: Icons.notifications_active,
+                  inactiveIcon: Icons.notifications_off_outlined,
                   onChanged: (val) async {
                     setState(() {
                       _notificationsEnabled = val;
@@ -461,7 +462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         SnackBar(
                           content: Text(
                             val ? 'Notifications turned on' : 'Notifications turned off',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.creamLight,
                               fontWeight: FontWeight.bold,
                             ),
@@ -475,6 +476,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       );
                     }
+                  },
+                ),
+                onTap: () {},
+              ),
+              _buildDivider(),
+              _buildListTile(
+                icon: Icons.light_mode_outlined,
+                title: 'Light Theme',
+                trailingWidget: CustomAnimatedSwitch(
+                  value: !_darkModeEnabled,
+                  activeColor: AppColors.black,
+                  activeIcon: Icons.light_mode,
+                  inactiveIcon: Icons.dark_mode_outlined,
+                  onChanged: (val) async {
+                    setState(() {
+                      _darkModeEnabled = !val;
+                    });
+                    await PreferencesService().setDarkModeEnabled(!val);
                   },
                 ),
                 onTap: () {},
@@ -537,7 +556,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 40),
             
             // APP VERSION FOOTER
-            const Center(
+            Center(
               child: Column(
                 children: [
                   Text(
@@ -574,7 +593,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return AlertDialog(
           backgroundColor: AppColors.creamBg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
+          title: Text(
             'Select Language',
             style: TextStyle(color: AppColors.black, fontWeight: FontWeight.bold, fontSize: 18),
           ),
@@ -586,8 +605,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               itemBuilder: (context, index) {
                 final lang = languages[index];
                 return ListTile(
-                  title: Text(lang, style: const TextStyle(color: AppColors.black)),
-                  trailing: _language == lang ? const Icon(Icons.check, color: AppColors.coral) : null,
+                  title: Text(lang, style: TextStyle(color: AppColors.black)),
+                  trailing: _language == lang ? Icon(Icons.check, color: AppColors.coral) : null,
                   onTap: () {
                     setState(() {
                       _language = lang;

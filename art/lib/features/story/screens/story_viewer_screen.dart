@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/story_model.dart';
+import '../../../core/services/preferences_service.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class StoryViewerScreen extends StatefulWidget {
@@ -71,6 +72,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
   void _startStory() {
     _percent = 0.0;
     _isPaused = false;
+    // Mark story as viewed as soon as it starts displaying, safely after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PreferencesService().markStoryViewed(_currentStory.userId, _currentStory.createdAt);
+    });
     _resumeStory();
   }
 

@@ -203,10 +203,10 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
       backgroundColor: AppColors.creamBg,
       appBar: AppBar(
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        iconTheme: const IconThemeData(color: AppColors.black),
+        iconTheme: IconThemeData(color: AppColors.black),
         title: Text(
           _artwork?.title ?? 'Artwork',
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.black,
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -220,7 +220,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
               child: CircularProgressIndicator(color: AppColors.coral),
             )
           : _artwork == null
-          ? const Center(
+          ? Center(
               child: Text(
                 'Artwork not found',
                 style: TextStyle(
@@ -285,7 +285,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 errorWidget: (context, url, error) => Container(
                                   height: 300,
                                   color: AppColors.creamDark,
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.broken_image,
                                     size: 48,
                                     color: AppColors.darkGrey,
@@ -333,7 +333,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                     child:
                                         _artwork!.authorAvatarUrl == null ||
                                             _artwork!.authorAvatarUrl!.isEmpty
-                                        ? const Icon(
+                                        ? Icon(
                                             Icons.person,
                                             color: AppColors.black,
                                           )
@@ -348,7 +348,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                   children: [
                                     Text(
                                       _artwork!.title,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 22,
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.black,
@@ -410,7 +410,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                     const SizedBox(width: 6),
                                     Text(
                                       NumberUtils.format(_likesCount),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
                                         color: AppColors.black,
@@ -448,7 +448,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                     _artwork!.description!.isNotEmpty) ...[
                                   Text(
                                     _artwork!.description!,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 14,
                                       color: AppColors.black,
                                       height: 1.5,
@@ -494,7 +494,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
 
                         const SizedBox(height: 8),
 
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 8,
@@ -513,7 +513,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                           ),
                           child: Row(
                             children: [
-                              const Text(
+                              Text(
                                 'Comments',
                                 style: TextStyle(
                                   fontSize: 18,
@@ -533,7 +533,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 ),
                                 child: Text(
                                   NumberUtils.format(_comments.length),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     color: AppColors.creamLight,
                                     fontWeight: FontWeight.bold,
@@ -546,7 +546,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
 
                         // Comments List rendered as bubble chats
                         _comments.isEmpty
-                            ? const Padding(
+                            ? Padding(
                                 padding: EdgeInsets.symmetric(
                                   horizontal: 20,
                                   vertical: 32,
@@ -605,7 +605,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                                       comment
                                                           .authorAvatarUrl!
                                                           .isEmpty
-                                                  ? const Icon(
+                                                  ? Icon(
                                                       Icons.person,
                                                       size: 15,
                                                       color: AppColors.black,
@@ -670,7 +670,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                                     const SizedBox(height: 4),
                                                     Text(
                                                       comment.content,
-                                                      style: const TextStyle(
+                                                      style: TextStyle(
                                                         color: AppColors.black,
                                                         fontSize: 14,
                                                         height: 1.3,
@@ -713,7 +713,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     horizontal: 16,
                     vertical: 10,
                   ),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.creamLight,
                     border: Border(
                       top: BorderSide(color: AppColors.lightGrey, width: 1),
@@ -738,11 +738,11 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                           Expanded(
                             child: TextField(
                               controller: _commentController,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.black,
                                 fontSize: 14,
                               ),
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 hintText: 'Add a comment...',
                                 hintStyle: TextStyle(
                                   color: AppColors.darkGrey,
@@ -831,7 +831,7 @@ class FullScreenImageViewer extends StatelessWidget {
             imageUrl: imageUrl,
             fit: BoxFit.contain,
             placeholder: (context, url) =>
-                const CircularProgressIndicator(color: AppColors.coral),
+                CircularProgressIndicator(color: AppColors.coral),
             errorWidget: (context, url, error) =>
                 const Icon(Icons.broken_image, color: Colors.white, size: 50),
           ),

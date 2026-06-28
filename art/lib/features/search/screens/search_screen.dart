@@ -267,7 +267,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ? CachedNetworkImageProvider(creator.avatarUrl!)
                       : null,
                   child: creator.avatarUrl == null || creator.avatarUrl!.isEmpty
-                      ? const Icon(
+                      ? Icon(
                           Icons.person,
                           color: AppColors.black,
                           size: 24,
@@ -283,7 +283,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     children: [
                       Text(
                         creator.displayName ?? creator.username,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: AppColors.black,
@@ -360,7 +360,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildArtworkGrid(List<ArtworkModel> artworks) {
     if (artworks.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
           child: Text(
@@ -413,7 +413,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         artwork.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                           color: AppColors.black,
@@ -468,7 +468,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildTrendingTags() {
     if (_trendingSearches.isEmpty) {
-      return const Text(
+      return Text(
         'No trending tags yet',
         style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
       );
@@ -491,7 +491,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
             child: Text(
               tag,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.black,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -506,7 +506,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: AppColors.black,
@@ -572,7 +572,7 @@ class _SearchScreenState extends State<SearchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_searchResults.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Artists',
                 style: TextStyle(
                   fontSize: 16,
@@ -585,7 +585,7 @@ class _SearchScreenState extends State<SearchScreen> {
               const SizedBox(height: 24),
             ],
             if (_artworkSearchResults.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Artworks',
                 style: TextStyle(
                   fontSize: 16,
@@ -598,7 +598,7 @@ class _SearchScreenState extends State<SearchScreen> {
               const SizedBox(height: 24),
             ],
             if (_tagSearchResults.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Matching Tags',
                 style: TextStyle(
                   fontSize: 16,
@@ -612,7 +612,7 @@ class _SearchScreenState extends State<SearchScreen> {
             if (_searchResults.isEmpty &&
                 _artworkSearchResults.isEmpty &&
                 _tagSearchResults.isEmpty)
-              const Center(
+              Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Text(
@@ -636,6 +636,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       body: SafeArea(
@@ -648,7 +649,7 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Search',
                     style: TextStyle(
                       fontSize: 28,
@@ -665,7 +666,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           color: AppColors.lightGrey,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Text(
+                        child: Text(
                           'View Feed',
                           style: TextStyle(
                             fontSize: 14,
@@ -693,12 +694,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    const Icon(Icons.search, color: AppColors.darkGrey),
+                    Icon(Icons.search, color: AppColors.darkGrey),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
                         controller: _searchController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Search artists, artworks, or tags',
                           hintStyle: TextStyle(color: AppColors.darkGrey),
                           border: InputBorder.none,
@@ -711,7 +712,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     if (_searchController.text.isNotEmpty)
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.clear,
                           color: AppColors.darkGrey,
                           size: 18,

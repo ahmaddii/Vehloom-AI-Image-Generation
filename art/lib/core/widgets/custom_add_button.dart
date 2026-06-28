@@ -6,6 +6,7 @@ class CustomAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return SizedBox(
       width: 52,
       height: 34,
@@ -48,7 +49,7 @@ class CustomAddButton extends StatelessWidget {
                 color: AppColors.black,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.add,
                 color: AppColors.creamLight,
                 size: 24,

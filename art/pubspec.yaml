@@ -53,6 +53,8 @@ dependencies:
   flutter_staggered_animations: ^1.1.1
   shimmer: ^3.0.0
   google_fonts: ^6.2.1
+  flutter_svg: ^2.3.0
+  flutter_native_splash: ^2.4.7
 
 dev_dependencies:
   flutter_test:
@@ -86,6 +88,7 @@ flutter:
       - assets/onboarding3/
       - assets/auth_options/
       - assets/app_icon/
+      - assets/native_splashlogo/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

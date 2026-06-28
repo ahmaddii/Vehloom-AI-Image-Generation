@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/preferences_service.dart';
+import '../../../core/services/push_notification_service.dart';
 import '../../../data/models/artwork_model.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
@@ -67,6 +69,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     _loadUnreadNotificationsCount();
     _subscribeToNotificationBadge();
     _subscribeToFeedUpdates();
+    
+    // Request notification permission if not already requested
+    PushNotificationService().init().catchError((e) {
+      debugPrint('Error initializing push notifications: $e');
+    });
   }
 
   Future<void> _initializeData() async {
@@ -441,6 +448,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Scaffold(
       backgroundColor: AppColors.creamBg,
       body: Container(
@@ -467,7 +475,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text.rich(
+                    Text.rich(
                       TextSpan(
                         text: 'Discover ',
                         style: TextStyle(
@@ -493,12 +501,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                           clipBehavior: Clip.none,
                           children: [
                             Container(
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 color: AppColors.creamLight,
                                 shape: BoxShape.circle,
                               ),
                               child: IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.notifications_outlined,
                                   color: AppColors.black,
                                   size: 24,
@@ -518,9 +526,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                     minWidth: 20,
                                     minHeight: 20,
                                   ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                  ),
+                                  padding: EdgeInsets.symmetric(horizontal: 5),
                                   decoration: BoxDecoration(
                                     color: AppColors.coral,
                                     borderRadius: BorderRadius.circular(999),
@@ -543,7 +549,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                     _unreadNotificationsCount > 99
                                         ? '99+'
                                         : '$_unreadNotificationsCount',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w900,
@@ -554,16 +560,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                               ),
                           ],
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: 12),
 
                         // Search button
                         Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.creamLight,
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.search_outlined,
                               color: AppColors.black,
                               size: 24,
@@ -581,7 +587,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
               SizedBox(
                 height: 90,
                 child: _creators.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'No followed creators yet. Search to find new artists!',
                           style: TextStyle(
@@ -590,150 +596,174 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                           ),
                         ),
                       )
-                    : ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _creators.length,
-                        itemBuilder: (context, index) {
-                          final creator = _creators[index];
-                          final isMe =
-                              creator.id == AuthRepository().currentUser?.id;
-                          final creatorStories = _activeStories
-                              .where((story) => story.userId == creator.id)
-                              .toList();
-                          final hasStories = creatorStories.isNotEmpty;
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: GestureDetector(
-                              onTap: () {
-                                if (hasStories) {
-                                  context.push(
-                                    '/story/${creator.id}',
-                                    extra: {'stories': _activeStories},
+                    : ListenableBuilder(
+                        listenable: PreferencesService(),
+                        builder: (context, _) {
+                          return ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _creators.length,
+                            itemBuilder: (context, index) {
+                              final creator = _creators[index];
+                              final isMe =
+                                  creator.id ==
+                                  AuthRepository().currentUser?.id;
+                              final creatorStories = _activeStories
+                                  .where((story) => story.userId == creator.id)
+                                  .toList();
+                              final hasStories = creatorStories.isNotEmpty;
+                              final hasUnviewed =
+                                  hasStories &&
+                                  PreferencesService().hasUnviewedStories(
+                                    creator.id,
+                                    creatorStories,
                                   );
-                                } else {
-                                  if (isMe) {
-                                    _showMyStoryOptions();
-                                  } else {
-                                    context.push('/profile/${creator.id}');
-                                  }
-                                }
-                              },
-                              child: Column(
-                                children: [
-                                  Stack(
+
+                              return Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 4),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (hasStories) {
+                                      context.push(
+                                        '/story/${creator.id}',
+                                        extra: {'stories': _activeStories},
+                                      );
+                                    } else {
+                                      if (isMe) {
+                                        _showMyStoryOptions();
+                                      } else {
+                                        context.push('/profile/${creator.id}');
+                                      }
+                                    }
+                                  },
+                                  child: Column(
                                     children: [
-                                      Container(
-                                        width: 66,
-                                        height: 66,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: hasStories
-                                              ? const SweepGradient(
-                                                  colors: [
-                                                    AppColors.coral,
-                                                    Color(0xFFFF007F),
-                                                    Color(0xFFFF7F00),
-                                                    AppColors.coral,
-                                                  ],
-                                                )
-                                              : null,
-                                        ),
-                                        padding: EdgeInsets.all(
-                                          hasStories ? 3.5 : 0,
-                                        ),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: hasStories
-                                                ? AppColors.creamBg
-                                                : Colors.transparent,
-                                          ),
-                                          padding: EdgeInsets.all(
-                                            hasStories ? 2.5 : 0,
-                                          ),
-                                          child: CircleAvatar(
-                                            radius: 26,
-                                            backgroundImage:
-                                                creator.avatarUrl != null &&
-                                                    creator
-                                                        .avatarUrl!
-                                                        .isNotEmpty
-                                                ? CachedNetworkImageProvider(
-                                                    creator.avatarUrl!,
-                                                  )
-                                                : null,
-                                            child:
-                                                creator.avatarUrl == null ||
-                                                    creator.avatarUrl!.isEmpty
-                                                ? const Icon(
-                                                    Icons.person,
-                                                    color: AppColors.black,
-                                                  )
-                                                : null,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isMe)
-                                        Positioned(
-                                          bottom: 0,
-                                          right: 0,
-                                          child: GestureDetector(
-                                            onTap: () => _showMyStoryOptions(),
-                                            behavior: HitTestBehavior.opaque,
+                                      Stack(
+                                        children: [
+                                          Container(
+                                            width: 66,
+                                            height: 66,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              gradient: hasUnviewed
+                                                  ? const SweepGradient(
+                                                      colors: [
+                                                        AppColors.coral,
+                                                        Color(0xFFFF007F),
+                                                        Color(0xFFFF7F00),
+                                                        AppColors.coral,
+                                                      ],
+                                                    )
+                                                  : null,
+                                              border:
+                                                  (hasStories && !hasUnviewed)
+                                                  ? Border.all(
+                                                      color:
+                                                          AppColors.lightGrey,
+                                                      width: 2.5,
+                                                    )
+                                                  : null,
+                                            ),
+                                            padding: EdgeInsets.all(
+                                              hasStories ? 3.5 : 0,
+                                            ),
                                             child: Container(
-                                              width: 22,
-                                              height: 22,
                                               decoration: BoxDecoration(
-                                                color: AppColors.coral,
                                                 shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: AppColors.creamBg,
-                                                  width: 1.5,
-                                                ),
+                                                color: hasStories
+                                                    ? AppColors.creamBg
+                                                    : Colors.transparent,
                                               ),
-                                              child: const Icon(
-                                                Icons.add,
-                                                size: 12,
-                                                color: Colors.white,
+                                              padding: EdgeInsets.all(
+                                                hasStories ? 2.5 : 0,
+                                              ),
+                                              child: CircleAvatar(
+                                                radius: 26,
+                                                backgroundImage:
+                                                    creator.avatarUrl != null &&
+                                                        creator
+                                                            .avatarUrl!
+                                                            .isNotEmpty
+                                                    ? CachedNetworkImageProvider(
+                                                        creator.avatarUrl!,
+                                                      )
+                                                    : null,
+                                                child:
+                                                    creator.avatarUrl == null ||
+                                                        creator
+                                                            .avatarUrl!
+                                                            .isEmpty
+                                                    ? Icon(
+                                                        Icons.person,
+                                                        color: AppColors.black,
+                                                      )
+                                                    : null,
                                               ),
                                             ),
                                           ),
+                                          if (isMe)
+                                            Positioned(
+                                              bottom: 0,
+                                              right: 0,
+                                              child: GestureDetector(
+                                                onTap: () =>
+                                                    _showMyStoryOptions(),
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                child: Container(
+                                                  width: 22,
+                                                  height: 22,
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.coral,
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(
+                                                      color: AppColors.creamBg,
+                                                      width: 1.5,
+                                                    ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.add,
+                                                    size: 12,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 6),
+                                      Text(
+                                        isMe
+                                            ? 'You'
+                                            : (creator.displayName ??
+                                                  creator.username),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: isMe
+                                              ? FontWeight.bold
+                                              : FontWeight.w600,
+                                          color: AppColors.black,
                                         ),
+                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    isMe
-                                        ? 'You'
-                                        : (creator.displayName ??
-                                              creator.username),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: isMe
-                                          ? FontWeight.bold
-                                          : FontWeight.w600,
-                                      color: AppColors.black,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
               ),
 
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
 
               // Categories Section Title
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       'Categories',
                       style: TextStyle(
                         fontSize: 16,
@@ -743,7 +773,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                     ),
                     GestureDetector(
                       onTap: () => context.push('/feed-view-all'),
-                      child: const Text(
+                      child: Text(
                         'View all',
                         style: TextStyle(
                           fontSize: 14,
@@ -756,14 +786,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
 
               // Categories list horizontal
               SizedBox(
                 height: 40,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: 24),
                   itemCount: _categories.length,
                   itemBuilder: (context, index) {
                     final category = _categories[index];
@@ -777,7 +807,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                           });
                         },
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
+                          padding: EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 8,
                           ),
@@ -813,18 +843,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Masonry Art Grid
               Expanded(
                 child: Stack(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: EdgeInsets.symmetric(horizontal: 20),
                       child: _isLoading
                           ? _buildSkeletonGrid()
                           : _filteredArtworks.isEmpty
-                          ? const Center(
+                          ? Center(
                               child: Text(
                                 'No artworks found',
                                 style: TextStyle(
@@ -920,7 +950,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                             child: Container(
                                                               color: AppColors
                                                                   .creamDark,
-                                                              child: const Icon(
+                                                              child: Icon(
                                                                 Icons
                                                                     .broken_image,
                                                                 color: AppColors
@@ -937,7 +967,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                     right: 12,
                                                     child: Container(
                                                       padding:
-                                                          const EdgeInsets.symmetric(
+                                                          EdgeInsets.symmetric(
                                                             horizontal: 8,
                                                             vertical: 4,
                                                           ),
@@ -953,20 +983,21 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                         mainAxisSize:
                                                             MainAxisSize.min,
                                                         children: [
-                                                          const Icon(
+                                                          Icon(
                                                             Icons.favorite,
                                                             color:
                                                                 AppColors.coral,
                                                             size: 12,
                                                           ),
-                                                          const SizedBox(
-                                                            width: 4,
-                                                          ),
+                                                          SizedBox(width: 4),
                                                           Text(
-                                                            NumberUtils.format(artwork.likesCount),
-                                                            style: const TextStyle(
-                                                              color: AppColors
-                                                                  .creamLight,
+                                                            NumberUtils.format(
+                                                              artwork
+                                                                  .likesCount,
+                                                            ),
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.white,
                                                               fontSize: 10,
                                                               fontWeight:
                                                                   FontWeight
@@ -1005,18 +1036,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                                     artwork
                                                                         .authorAvatarUrl!
                                                                         .isEmpty
-                                                                ? const Icon(
+                                                                ? Icon(
                                                                     Icons
                                                                         .person,
                                                                     size: 8,
-                                                                    color: AppColors
+                                                                    color: Colors
                                                                         .black,
                                                                   )
                                                                 : null,
                                                           ),
-                                                          const SizedBox(
-                                                            width: 6,
-                                                          ),
+                                                          SizedBox(width: 6),
                                                           Text(
                                                             artwork.userId ==
                                                                     AuthRepository()
@@ -1024,9 +1053,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                                         ?.id
                                                                 ? '@${artwork.authorUsername} (You)'
                                                                 : '@${artwork.authorUsername}',
-                                                            style: const TextStyle(
-                                                              color: AppColors
-                                                                  .creamLight,
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.white,
                                                               fontSize: 11,
                                                               fontWeight:
                                                                   FontWeight
@@ -1073,7 +1102,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                               _loadData(showLoading: true);
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
+                              padding: EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 8,
                               ),
@@ -1088,7 +1117,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                   ),
                                 ],
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
@@ -1128,11 +1157,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.creamBg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1147,8 +1176,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text(
+              SizedBox(height: 24),
+              Text(
                 'Your Story',
                 style: TextStyle(
                   color: AppColors.black,
@@ -1157,13 +1186,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.add_photo_alternate_outlined,
                   color: AppColors.coral,
                 ),
-                title: const Text(
+                title: Text(
                   'Post a Photo Story',
                   style: TextStyle(
                     color: AppColors.black,
@@ -1177,11 +1206,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(
-                  Icons.person_outline,
-                  color: AppColors.black,
-                ),
-                title: const Text(
+                leading: Icon(Icons.person_outline, color: AppColors.black),
+                title: Text(
                   'View Profile',
                   style: TextStyle(
                     color: AppColors.black,
@@ -1268,10 +1294,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
             child: Center(
               child: Container(
                 width: 220,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 28,
-                  horizontal: 20,
-                ),
+                padding: EdgeInsets.symmetric(vertical: 28, horizontal: 20),
                 decoration: BoxDecoration(
                   color: AppColors.creamBg,
                   borderRadius: BorderRadius.circular(24),
@@ -1306,7 +1329,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                             ),
                             Text(
                               '${(progress * 100).toInt()}%',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.black,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -1314,8 +1337,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        const Text(
+                        SizedBox(height: 20),
+                        Text(
                           'Sharing to Story...',
                           style: TextStyle(
                             color: AppColors.black,
@@ -1430,6 +1453,7 @@ class _DoubleTapLikeWrapperState extends State<_DoubleTapLikeWrapper>
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return GestureDetector(
       onTap: widget.onTap,
       onDoubleTap: _handleDoubleTap,
@@ -1440,7 +1464,7 @@ class _DoubleTapLikeWrapperState extends State<_DoubleTapLikeWrapper>
           if (_isAnimating)
             ScaleTransition(
               scale: _scaleAnimation,
-              child: const Icon(
+              child: Icon(
                 Icons.favorite,
                 color: Colors.white,
                 size: 80,

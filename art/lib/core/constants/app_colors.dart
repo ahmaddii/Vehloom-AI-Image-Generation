@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import '../services/preferences_service.dart';
 
 class AppColors {
-  // Cream / Warm Beige (Scaffold background and canvas)
-  static const Color creamBg = Color(0xFFF5F2EB);
-  static const Color creamLight = Color(0xFFFFFFFF);
-  static const Color creamDark = Color(0xFFEDE9E0); // Input fill color
+  static bool get _isDark => PreferencesService().darkModeEnabled;
 
-  // Primary Black
-  static const Color black = Color(0xFF1E1B15);
-  static const Color darkGrey = Color(0xFF2A2A2A);
-  static const Color lightGrey = Color(0xFFEBE6DD);
+  // Cream / Warm Beige (Scaffold background and canvas)
+  static Color get creamBg => _isDark ? const Color(0xFF1E1B15) : const Color(0xFFF5F2EB);
+  static Color get creamLight => _isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFFFFFF);
+  static Color get creamDark => _isDark ? const Color(0xFF121212) : const Color(0xFFEDE9E0);
+
+  // Primary Black -> Inverted in dark mode
+  static Color get black => _isDark ? const Color(0xFFF5F2EB) : const Color(0xFF1E1B15);
+  static Color get darkGrey => _isDark ? const Color(0xFFEBE6DD) : const Color(0xFF2A2A2A);
+  static Color get lightGrey => _isDark ? const Color(0xFF4A4A4A) : const Color(0xFFEBE6DD);
 
   // Coral / Accent (Buttons, indicators, highlights)
   static const Color coral = Color(0xFFFF5A4E);

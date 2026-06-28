@@ -31,10 +31,4 @@ Future<void> main() async {
   await PreferencesService().init();
 
   runApp(const MyApp());
-
-  // Initialize push notifications asynchronously after the app UI starts
-  // so that permission dialogs have an Activity to attach to.
-  PushNotificationService().init().catchError((e) {
-    debugPrint('Error initializing push notifications: $e');
-  });
 }

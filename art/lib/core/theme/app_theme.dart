@@ -10,13 +10,13 @@ class AppTheme {
       textTheme: GoogleFonts.interTextTheme(),
       scaffoldBackgroundColor: AppColors.creamBg,
       primaryColor: AppColors.black,
-      colorScheme: const ColorScheme.light(
+      colorScheme: ColorScheme.light(
         primary: AppColors.black,
         secondary: AppColors.coral,
         surface: AppColors.creamLight,
         error: AppColors.error,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.creamBg,
         elevation: 0,
         centerTitle: true,
@@ -56,11 +56,11 @@ class AppTheme {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.lightGrey, width: 1),
+          borderSide: BorderSide(color: AppColors.lightGrey, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.lightGrey, width: 1),
+          borderSide: BorderSide(color: AppColors.lightGrey, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -68,7 +68,7 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error, width: 1),
+          borderSide: BorderSide(color: AppColors.error, width: 1),
         ),
       ),
     );
@@ -78,16 +78,19 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-      scaffoldBackgroundColor: const Color(0xFF121212),
-      primaryColor: Colors.white,
+      scaffoldBackgroundColor: const Color(0xFF1E1B15), // Matching AppColors dark creamBg
+      primaryColor: const Color(0xFFF5F2EB), // Matching AppColors dark black
       colorScheme: const ColorScheme.dark(
-        primary: Colors.white,
+        primary: Color(0xFFF5F2EB),
         secondary: AppColors.coral,
-        surface: Color(0xFF1E1E1E),
+        surface: Color(0xFF2A2A2A), // Matching AppColors dark creamLight
+        onSurface: Color(0xFFF5F2EB), // Matching AppColors dark black
+        onSurfaceVariant: Color(0xFFEBE6DD), // Matching AppColors dark darkGrey
+        surfaceContainerHighest: Color(0xFF4A4A4A), // Matching AppColors dark lightGrey
         error: AppColors.error,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF121212),
+        backgroundColor: Color(0xFF1E1B15),
         elevation: 0,
         centerTitle: true,
         iconTheme: IconThemeData(color: Colors.white),
@@ -138,7 +141,7 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error, width: 1),
+          borderSide: BorderSide(color: AppColors.error, width: 1),
         ),
       ),
     );

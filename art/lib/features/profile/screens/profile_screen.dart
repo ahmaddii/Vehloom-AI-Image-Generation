@@ -239,10 +239,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         children: [
           Text(
             count,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w900,
-              color: AppColors.creamLight,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 2),
@@ -251,7 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: AppColors.creamLight.withOpacity(0.6),
+              color: Colors.white.withOpacity(0.6),
             ),
           ),
         ],
@@ -273,8 +273,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         alignment: Alignment.center,
         child: Text(
           label,
-          style: const TextStyle(
-            color: AppColors.creamLight,
+          style: TextStyle(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 13,
           ),
@@ -299,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildGrid(List<ArtworkModel> artworks) {
     if (artworks.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No posts yet.',
           style: TextStyle(color: AppColors.darkGrey),
@@ -336,7 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Container(color: AppColors.darkGrey),
                   errorWidget: (context, url, error) => Container(
                     color: AppColors.darkGrey,
-                    child: const Icon(
+                    child: Icon(
                       Icons.broken_image,
                       color: Colors.white24,
                     ),
@@ -365,8 +365,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             artwork.description!.isNotEmpty
                         ? artwork.description!
                         : 'Untitled',
-                    style: const TextStyle(
-                      color: AppColors.creamLight,
+                    style: TextStyle(
+                      color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       height: 1.2,
@@ -385,6 +385,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: _isHeaderScrolledOut
           ? SystemUiOverlayStyle.dark
@@ -392,11 +393,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Scaffold(
         backgroundColor: AppColors.creamBg,
         body: _isLoading
-            ? const Center(
+            ? Center(
                 child: CircularProgressIndicator(color: AppColors.coral),
               )
             : _profile == null
-            ? const Center(
+            ? Center(
                 child: Text(
                   'Profile not found',
                   style: TextStyle(
@@ -412,9 +413,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   return [
                     SliverToBoxAdapter(
                       child: Container(
-                        decoration: const BoxDecoration(
-                          color: AppColors.black,
-                          borderRadius: BorderRadius.only(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E1B15),
+                          border: Border.all(color: Colors.white24, width: 1),
+                          borderRadius: const BorderRadius.only(
                             bottomLeft: Radius.circular(40),
                             bottomRight: Radius.circular(40),
                           ),
@@ -439,17 +441,17 @@ class _ProfileScreenState extends State<ProfileScreen>
                                       context.go('/');
                                     }
                                   },
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.arrow_back,
-                                    color: AppColors.creamLight,
+                                    color: Colors.white,
                                   ),
                                 ),
                                 if (_isMe)
                                   GestureDetector(
                                     onTap: () => context.push('/settings'),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.tune,
-                                      color: AppColors.creamLight,
+                                      color: Colors.white,
                                     ),
                                   )
                                 else
@@ -482,10 +484,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   child:
                                       _profile!.avatarUrl == null ||
                                           _profile!.avatarUrl!.isEmpty
-                                      ? const Icon(
+                                      ? Icon(
                                           Icons.person,
                                           size: 40,
-                                          color: AppColors.creamLight,
+                                          color: Colors.white,
                                         )
                                       : null,
                                 ),
@@ -498,10 +500,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                                       Text(
                                         _profile!.displayName ??
                                             _profile!.username,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 24,
                                           fontWeight: FontWeight.w900,
-                                          color: AppColors.creamLight,
+                                          color: Colors.white,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -512,7 +514,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,
-                                          color: AppColors.creamLight
+                                          color: Colors.white
                                               .withOpacity(0.6),
                                         ),
                                       ),
@@ -593,7 +595,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           indicatorWeight: 2,
                           labelColor: AppColors.black,
                           unselectedLabelColor: AppColors.darkGrey,
-                          dividerColor: AppColors.lightGrey,
+                          dividerColor: Colors.transparent,
                           tabs: const [
                             Tab(icon: Icon(Icons.grid_on_outlined)),
                             Tab(icon: Icon(Icons.bookmark_border)),
@@ -673,7 +675,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.6,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.creamBg,
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(24),
@@ -694,17 +696,17 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
           const SizedBox(height: 16),
           Text(
             widget.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppColors.black,
             ),
           ),
           const SizedBox(height: 8),
-          const Divider(color: AppColors.lightGrey, thickness: 1),
+          Divider(color: AppColors.lightGrey, thickness: 1),
           Expanded(
             child: _isLoading
-                ? const Center(
+                ? Center(
                     child: CircularProgressIndicator(color: AppColors.coral),
                   )
                 : _users.isEmpty
@@ -713,7 +715,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                       widget.isFollowers
                           ? 'No followers yet.'
                           : 'Not following anyone yet.',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.darkGrey,
                         fontSize: 14,
                       ),
@@ -751,7 +753,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                             child:
                                 user.avatarUrl == null ||
                                     user.avatarUrl!.isEmpty
-                                ? const Icon(
+                                ? Icon(
                                     Icons.person,
                                     color: AppColors.black,
                                   )
@@ -760,7 +762,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                         ),
                         title: Text(
                           user.displayName ?? user.username,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppColors.black,
                             fontSize: 15,
@@ -768,7 +770,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                         ),
                         subtitle: Text(
                           '@${user.username}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.darkGrey,
                             fontSize: 13,
                           ),

@@ -10,8 +10,9 @@ class AppBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Theme.of(context); // Force rebuild on theme change
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.creamLight,
         border: Border(top: BorderSide(color: AppColors.lightGrey, width: 1)),
       ),

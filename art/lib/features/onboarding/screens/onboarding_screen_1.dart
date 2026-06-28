@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../core/services/push_notification_service.dart';
 
 class OnboardingScreen1 extends StatefulWidget {
   const OnboardingScreen1({super.key});
@@ -26,6 +27,11 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
           final ext = i == 2 ? 'png' : 'jpg';
           precacheImage(AssetImage('assets/onboarding3/$i.$ext'), context);
         }
+        
+        // Request notification permission here instead of splash screen
+        PushNotificationService().init().catchError((e) {
+          debugPrint('Error initializing push notifications: $e');
+        });
       }
     });
   }
@@ -132,7 +138,7 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
                             Text(
                               slide['title'],
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.black,
