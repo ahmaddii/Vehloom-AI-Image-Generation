@@ -11,6 +11,8 @@ class ArtworkModel {
   final DateTime createdAt;
   final String? authorUsername;
   final String? authorAvatarUrl;
+  final String? aiTool;
+  final String? aiPrompt;
 
   ArtworkModel({
     required this.id,
@@ -25,6 +27,8 @@ class ArtworkModel {
     required this.createdAt,
     this.authorUsername,
     this.authorAvatarUrl,
+    this.aiTool,
+    this.aiPrompt,
   });
 
   factory ArtworkModel.fromJson(Map<String, dynamic> json) {
@@ -93,6 +97,8 @@ class ArtworkModel {
       createdAt: DateTime.parse(json['created_at'] as String),
       authorUsername: profile?['username'] as String? ?? json['author_username'] as String?,
       authorAvatarUrl: profile?['avatar_url'] as String? ?? json['author_avatar_url'] as String?,
+      aiTool: json['ai_tool'] as String?,
+      aiPrompt: json['ai_prompt'] as String?,
     );
   }
 
@@ -110,6 +116,8 @@ class ArtworkModel {
       'created_at': createdAt.toIso8601String(),
       'author_username': authorUsername,
       'author_avatar_url': authorAvatarUrl,
+      'ai_tool': aiTool,
+      'ai_prompt': aiPrompt,
     };
   }
 
@@ -126,6 +134,8 @@ class ArtworkModel {
     DateTime? createdAt,
     String? authorUsername,
     String? authorAvatarUrl,
+    String? aiTool,
+    String? aiPrompt,
   }) {
     return ArtworkModel(
       id: id ?? this.id,
@@ -140,6 +150,8 @@ class ArtworkModel {
       createdAt: createdAt ?? this.createdAt,
       authorUsername: authorUsername ?? this.authorUsername,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      aiTool: aiTool ?? this.aiTool,
+      aiPrompt: aiPrompt ?? this.aiPrompt,
     );
   }
 }

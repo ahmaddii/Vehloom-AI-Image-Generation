@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:gal/gal.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/artwork_model.dart';
@@ -9,6 +15,7 @@ import '../../../data/models/comment_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/utils/number_utils.dart';
+import 'edit_artwork_screen.dart';
 
 class ArtworkDetailScreen extends StatefulWidget {
   final String artworkId;
@@ -28,6 +35,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
   int _likesCount = 0;
   bool _isLoading = true;
   bool _isSubmittingComment = false;
+  bool _isPromptExpanded = false;
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
   RealtimeChannel? _artworkChannel;
 
@@ -214,6 +222,13 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
         ),
         elevation: 0,
         backgroundColor: Colors.transparent,
+        actions: [
+          if (_artwork != null)
+            IconButton(
+              icon: Icon(Icons.more_vert, color: AppColors.black),
+              onPressed: _showArtworkMenu,
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(
@@ -426,7 +441,11 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                         // Artwork Description and Tags box
                         if ((_artwork!.description != null &&
                                 _artwork!.description!.isNotEmpty) ||
-                            _artwork!.tags.isNotEmpty)
+                            _artwork!.tags.isNotEmpty ||
+                            (_artwork!.aiTool != null &&
+                                _artwork!.aiTool!.isNotEmpty) ||
+                            (_artwork!.aiPrompt != null &&
+                                _artwork!.aiPrompt!.isNotEmpty))
                           Container(
                             margin: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -444,6 +463,28 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                if (_artwork!.aiTool != null &&
+                                    _artwork!.aiTool!.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.auto_awesome,
+                                        size: 16,
+                                        color: AppColors.coral,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Created with ${_artwork!.aiTool}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.coral,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
                                 if (_artwork!.description != null &&
                                     _artwork!.description!.isNotEmpty) ...[
                                   Text(
@@ -454,6 +495,89 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                       height: 1.5,
                                     ),
                                   ),
+                                  if (_artwork!.tags.isNotEmpty ||
+                                      (_artwork!.aiPrompt != null &&
+                                          _artwork!.aiPrompt!.isNotEmpty))
+                                    const SizedBox(height: 12),
+                                ],
+                                if (_artwork!.aiPrompt != null &&
+                                    _artwork!.aiPrompt!.isNotEmpty) ...[
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'AI Prompt',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.darkGrey,
+                                          letterSpacing: 1.1,
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          Clipboard.setData(
+                                            ClipboardData(
+                                              text: _artwork!.aiPrompt!,
+                                            ),
+                                          );
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Prompt copied to clipboard',
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        child: Icon(
+                                          Icons.copy,
+                                          size: 16,
+                                          color: AppColors.coral,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _artwork!.aiPrompt!,
+                                    maxLines: _isPromptExpanded ? null : 3,
+                                    overflow: _isPromptExpanded
+                                        ? TextOverflow.visible
+                                        : TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.black,
+                                      height: 1.5,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                  if (_artwork!.aiPrompt!.length > 100)
+                                    GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _isPromptExpanded =
+                                              !_isPromptExpanded;
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 6.0,
+                                        ),
+                                        child: Text(
+                                          _isPromptExpanded
+                                              ? 'Show less'
+                                              : 'Show more',
+                                          style: TextStyle(
+                                            color: AppColors.coral,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   if (_artwork!.tags.isNotEmpty)
                                     const SizedBox(height: 12),
                                 ],
@@ -787,6 +911,212 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  void _showArtworkMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.creamBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.share_outlined, color: AppColors.black),
+              title: Text(
+                'Share',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _shareArtwork();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.download_outlined, color: AppColors.black),
+              title: Text(
+                'Download',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _downloadArtwork();
+              },
+            ),
+            if (_artwork?.userId == _currentUserId) ...[
+              ListTile(
+                leading: Icon(Icons.edit_outlined, color: AppColors.black),
+                title: Text(
+                  'Edit Post',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (!mounted) return;
+                  final updatedArtwork = await Navigator.push(
+                    context, // Parent context
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          EditArtworkScreen(artwork: _artwork!),
+                    ),
+                  );
+                  if (mounted &&
+                      updatedArtwork != null &&
+                      updatedArtwork is ArtworkModel) {
+                    setState(() {
+                      _artwork = updatedArtwork;
+                    });
+                  }
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: Colors.red),
+                title: Text(
+                  'Delete Post',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  if (mounted) _showDeleteConfirmation();
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareArtwork() async {
+    if (_artwork == null) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Preparing image for sharing...')),
+      );
+
+      final response = await http.get(Uri.parse(_artwork!.imageUrl));
+      if (response.statusCode != 200) throw Exception('Failed to load image');
+
+      final tempDir = await getTemporaryDirectory();
+      final tempPath = '${tempDir.path}/shared_artwork_${_artwork!.id}.png';
+      final file = File(tempPath);
+      await file.writeAsBytes(response.bodyBytes);
+
+      final String caption =
+          '${_artwork!.title}${_artwork!.description != null ? '\n\n${_artwork!.description}' : ''}\n\nShared via ArtSharing App';
+
+      await Share.shareXFiles([XFile(tempPath)], text: caption);
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text('Failed to share: $e')));
+      }
+    }
+  }
+
+  Future<void> _downloadArtwork() async {
+    if (_artwork == null) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Downloading image...')),
+      );
+
+      final response = await http.get(Uri.parse(_artwork!.imageUrl));
+      if (response.statusCode != 200)
+        throw Exception('Failed to download image');
+
+      final tempDir = await getTemporaryDirectory();
+      final tempPath = '${tempDir.path}/download_${_artwork!.id}.png';
+      final file = File(tempPath);
+      await file.writeAsBytes(response.bodyBytes);
+
+      await Gal.putImage(tempPath);
+
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Image saved to Gallery!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to save image: $e')),
+        );
+      }
+    }
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.creamBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete Artwork?',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This action cannot be undone.',
+          style: TextStyle(color: AppColors.black),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: AppColors.creamLight,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext); // Close dialog
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await ArtworkRepository().deleteArtwork(widget.artworkId);
+                if (mounted) {
+                  context.pop(); // Go back from artwork detail screen
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Artwork deleted')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Failed to delete artwork')),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 }

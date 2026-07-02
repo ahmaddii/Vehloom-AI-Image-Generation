@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/artwork_model.dart';
 import '../models/comment_model.dart';
 import 'notification_repository.dart';
+import 'auth_repository.dart';
+import 'profile_repository.dart';
 
 class ArtworkRepository {
   final SupabaseClient _client = Supabase.instance.client;
@@ -14,11 +16,23 @@ class ArtworkRepository {
     int limit = 20,
   }) async {
     try {
-      final response = await _client
+      var query = _client
           .from('artworks')
           .select(
             '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
-          )
+          );
+
+      final currentUserId = AuthRepository().currentUser?.id;
+      if (currentUserId != null) {
+        final blockedIds = await ProfileRepository().getBlockedUserIds(
+          currentUserId,
+        );
+        if (blockedIds.isNotEmpty) {
+          query = query.not('user_id', 'in', blockedIds);
+        }
+      }
+
+      final response = await query
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
 
@@ -89,6 +103,8 @@ class ArtworkRepository {
     String? description,
     required String imageUrl,
     List<String> tags = const [],
+    String? aiTool,
+    String? aiPrompt,
   }) async {
     final response = await _client
         .from('artworks')
@@ -98,8 +114,38 @@ class ArtworkRepository {
           'description': description,
           'image_url': imageUrl,
           'tags': tags,
+          'ai_tool': aiTool,
+          'ai_prompt': aiPrompt,
           'created_at': DateTime.now().toIso8601String(),
         })
+        .select('*, profiles:user_id(username, display_name, avatar_url)')
+        .single();
+
+    return ArtworkModel.fromJson(response);
+  }
+
+  Future<void> deleteArtwork(String artworkId) async {
+    await _client.from('artworks').delete().eq('id', artworkId);
+  }
+
+  Future<ArtworkModel> updateArtwork({
+    required String artworkId,
+    required String title,
+    String? description,
+    List<String> tags = const [],
+    String? aiTool,
+    String? aiPrompt,
+  }) async {
+    final response = await _client
+        .from('artworks')
+        .update({
+          'title': title,
+          'description': description,
+          'tags': tags,
+          'ai_tool': aiTool,
+          'ai_prompt': aiPrompt,
+        })
+        .eq('id', artworkId)
         .select('*, profiles:user_id(username, display_name, avatar_url)')
         .single();
 
@@ -285,11 +331,23 @@ class ArtworkRepository {
 
   Future<List<ArtworkModel>> fetchTrendingArtworks({int limit = 20}) async {
     try {
-      final response = await _client
+      var query = _client
           .from('artworks')
           .select(
             '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
-          )
+          );
+
+      final currentUserId = AuthRepository().currentUser?.id;
+      if (currentUserId != null) {
+        final blockedIds = await ProfileRepository().getBlockedUserIds(
+          currentUserId,
+        );
+        if (blockedIds.isNotEmpty) {
+          query = query.not('user_id', 'in', blockedIds);
+        }
+      }
+
+      final response = await query
           .order('created_at', ascending: false)
           .limit(100);
 

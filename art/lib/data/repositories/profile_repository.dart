@@ -158,4 +158,66 @@ class ProfileRepository {
       return [];
     }
   }
+
+  Future<void> blockUser(String blockerId, String blockedId) async {
+    try {
+      await _client.from('blocks').insert({
+        'blocker_id': blockerId,
+        'blocked_id': blockedId,
+      });
+      // Also remove follows if any exist between them
+      await _client.from('follows').delete().eq('follower_id', blockerId).eq('following_id', blockedId);
+      await _client.from('follows').delete().eq('follower_id', blockedId).eq('following_id', blockerId);
+    } catch (_) {}
+  }
+
+  Future<void> unblockUser(String blockerId, String blockedId) async {
+    try {
+      await _client.from('blocks').delete().eq('blocker_id', blockerId).eq('blocked_id', blockedId);
+    } catch (_) {}
+  }
+
+  Future<bool> isBlocked(String currentUserId, String targetUserId) async {
+    if (currentUserId.isEmpty || targetUserId.isEmpty) return false;
+    try {
+      final res = await _client
+          .from('blocks')
+          .select()
+          .or('and(blocker_id.eq.$currentUserId,blocked_id.eq.$targetUserId),and(blocker_id.eq.$targetUserId,blocked_id.eq.$currentUserId)')
+          .limit(1);
+      return res.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<String>> getBlockedUserIds(String userId) async {
+    if (userId.isEmpty) return [];
+    try {
+      final blocked = await _client.from('blocks').select('blocked_id').eq('blocker_id', userId);
+      final blockers = await _client.from('blocks').select('blocker_id').eq('blocked_id', userId);
+      
+      final Set<String> blockedIds = {};
+      for (var b in blocked) blockedIds.add(b['blocked_id'] as String);
+      for (var b in blockers) blockedIds.add(b['blocker_id'] as String);
+      
+      return blockedIds.toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<ProfileModel>> fetchBlockedProfiles(String currentUserId) async {
+    try {
+      final res = await _client.from('blocks').select('blocked_id').eq('blocker_id', currentUserId);
+      if (res.isEmpty) return [];
+      
+      final ids = (res as List).map((e) => e['blocked_id'] as String).toList();
+      final profilesRes = await _client.from('profiles').select().inFilter('id', ids);
+      
+      return (profilesRes as List).map((p) => ProfileModel.fromJson(p)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 }

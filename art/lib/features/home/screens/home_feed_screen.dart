@@ -905,9 +905,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                 } catch (_) {}
                                               }
                                             },
-                                            onTap: () => context.push(
-                                              '/artwork/${artwork.id}',
-                                            ),
+                                            onTap: () async {
+                                              await context.push('/artwork/${artwork.id}');
+                                              if (mounted) {
+                                                _loadData(showLoading: false);
+                                              }
+                                            },
                                             child: ClipRRect(
                                               borderRadius:
                                                   BorderRadius.circular(24),

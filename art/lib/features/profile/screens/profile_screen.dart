@@ -34,6 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _followingCount = 0;
   bool _isFollowing = false;
   bool _isLoading = true;
+  bool _isBlocked = false;
 
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
   late final String _targetUserId;
@@ -152,6 +153,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       List<ProfileModel> followers = [];
       List<ProfileModel> following = [];
       bool isFollowing = false;
+      bool isBlocked = false;
 
       // Parallel execution
       await Future.wait([
@@ -172,7 +174,16 @@ class _ProfileScreenState extends State<ProfileScreen>
           SocialRepository()
               .isFollowing(_currentUserId, _targetUserId)
               .then((v) => isFollowing = v),
+        if (!_isMe && _currentUserId.isNotEmpty)
+          ProfileRepository()
+              .isBlocked(_currentUserId, _targetUserId)
+              .then((v) => isBlocked = v),
       ]);
+
+      if (isBlocked) {
+        artworks = [];
+        favoritedArtworks = [];
+      }
 
       if (mounted) {
         setState(() {
@@ -182,6 +193,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           _followersCount = followers.length;
           _followingCount = following.length;
           _isFollowing = isFollowing;
+          _isBlocked = isBlocked;
         });
       }
     } catch (_) {}
@@ -228,6 +240,48 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (mounted) {
       context.go('/login');
     }
+  }
+
+  void _showProfileMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.creamBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                _isBlocked ? Icons.lock_open : Icons.block,
+                color: AppColors.coral,
+              ),
+              title: Text(
+                _isBlocked ? 'Unblock User' : 'Block User',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                if (_isBlocked) {
+                  await ProfileRepository().unblockUser(_currentUserId, _targetUserId);
+                } else {
+                  await ProfileRepository().blockUser(_currentUserId, _targetUserId);
+                }
+                _loadProfileData();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildStatColumn(String count, String label, {VoidCallback? onTap}) {
@@ -318,7 +372,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       itemBuilder: (context, index) {
         final artwork = artworks[index];
         return GestureDetector(
-          onTap: () => context.push('/artwork/${artwork.id}'),
+          onTap: () async {
+            await context.push('/artwork/${artwork.id}');
+            if (mounted) {
+              _loadProfileData(showLoading: false);
+            }
+          },
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Stack(
@@ -361,10 +420,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   left: 16,
                   right: 16,
                   child: Text(
-                    artwork.description != null &&
-                            artwork.description!.isNotEmpty
-                        ? artwork.description!
-                        : 'Untitled',
+                    artwork.title.isNotEmpty ? artwork.title : 'Untitled',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -455,7 +511,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     ),
                                   )
                                 else
-                                  const SizedBox(width: 24),
+                                  GestureDetector(
+                                    onTap: _showProfileMenu,
+                                    child: Icon(
+                                      Icons.more_vert,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                               ],
                             ),
                             const SizedBox(height: 24),
@@ -519,7 +581,24 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         ),
                                       ),
                                       const SizedBox(height: 12),
-                                      // Action Buttons
+                                      if (_isBlocked)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.coral.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            'User is blocked',
+                                            style: TextStyle(
+                                              color: AppColors.coral,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        // Action Buttons
                                       Row(
                                         children: [
                                           if (_isMe)
@@ -563,25 +642,26 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ),
                             const SizedBox(height: 32),
                             // Stats Row inside top card
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _buildStatColumn(
-                                  NumberUtils.format(_artworks.length),
-                                  'Posts',
-                                ),
-                                _buildStatColumn(
-                                  NumberUtils.format(_followersCount),
-                                  'Followers',
-                                  onTap: () => _showSocialList(true),
-                                ),
-                                _buildStatColumn(
-                                  NumberUtils.format(_followingCount),
-                                  'Following',
-                                  onTap: () => _showSocialList(false),
-                                ),
-                              ],
-                            ),
+                            if (!_isBlocked)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildStatColumn(
+                                    NumberUtils.format(_artworks.length),
+                                    'Posts',
+                                  ),
+                                  _buildStatColumn(
+                                    NumberUtils.format(_followersCount),
+                                    'Followers',
+                                    onTap: () => _showSocialList(true),
+                                  ),
+                                  _buildStatColumn(
+                                    NumberUtils.format(_followingCount),
+                                    'Following',
+                                    onTap: () => _showSocialList(false),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
@@ -606,13 +686,24 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                   ];
                 },
-                body: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildGrid(_artworks),
-                    _buildGrid(_favoritedArtworks),
-                  ],
-                ),
+                body: _isBlocked
+                    ? Center(
+                        child: Text(
+                          'Content unavailable',
+                          style: TextStyle(
+                            color: AppColors.darkGrey,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    : TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildGrid(_artworks),
+                          _buildGrid(_favoritedArtworks),
+                        ],
+                      ),
               ),
 
         // Bottom Navigation Bar

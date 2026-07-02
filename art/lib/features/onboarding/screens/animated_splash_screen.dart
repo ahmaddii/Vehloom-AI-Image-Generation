@@ -14,13 +14,23 @@ class AnimatedSplashScreen extends StatefulWidget {
 }
 
 class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _controller;
+  late AnimationController _glowController;
+  late AnimationController _dotsController;
+
   late Animation<double> _logoScale;
-  late Animation<Offset> _logoSlide;
+  late Animation<double> _logoOpacity;
+  late Animation<double> _glowOpacity;
+  late Animation<double> _glowScale;
+
   late Animation<double> _textOpacity;
   late Animation<Offset> _textSlide;
+
   late Animation<double> _captionOpacity;
+  late Animation<Offset> _captionSlide;
+
+  late Animation<double> _dotsOpacity;
 
   @override
   void initState() {
@@ -28,68 +38,99 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 2200),
     );
 
-    // Subtle scale bounce for the logo
+    // Glow pulse loops independently, gives a "breathing" premium feel
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+
+    _dotsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+
+    _glowOpacity = Tween<double>(begin: 0.25, end: 0.55).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+    _glowScale = Tween<double>(begin: 0.9, end: 1.15).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+
+    // Logo: soft bounce-in pop, feels alive not mechanical
     _logoScale =
         TweenSequence<double>([
           TweenSequenceItem(
             tween: Tween(
-              begin: 1.0,
-              end: 1.05,
-            ).chain(CurveTween(curve: Curves.easeOut)),
-            weight: 40,
+              begin: 0.75,
+              end: 1.06,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)),
+            weight: 65,
           ),
           TweenSequenceItem(
             tween: Tween(
-              begin: 1.05,
+              begin: 1.06,
               end: 1.0,
-            ).chain(CurveTween(curve: Curves.easeIn)),
-            weight: 60,
+            ).chain(CurveTween(curve: Curves.easeOut)),
+            weight: 35,
           ),
         ]).animate(
-          CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.5)),
-        );
-
-    // Logo slides up from center
-    // We will use an animation value from 0.0 to 1.0 and multiply it by pixels
-    _logoSlide = Tween<Offset>(begin: Offset.zero, end: const Offset(0, 1.0))
-        .animate(
           CurvedAnimation(
             parent: _controller,
-            curve: const Interval(0.2, 0.6, curve: Curves.easeOutCubic),
+            curve: const Interval(0.0, 0.45),
           ),
         );
 
-    // Text slides up
-    _textSlide = Tween<Offset>(begin: Offset.zero, end: const Offset(0, 1.0))
-        .animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: const Interval(0.4, 0.7, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.4, 0.7, curve: Curves.easeIn),
+        curve: const Interval(0.0, 0.3, curve: Curves.easeIn),
       ),
     );
 
-    // Caption fades in slowly
+    // Title slides up + fades in, starts once logo has mostly settled
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.35, 0.65, curve: Curves.easeOutCubic),
+          ),
+        );
+    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.35, 0.65, curve: Curves.easeIn),
+      ),
+    );
+
+    // Caption follows shortly after title, small stagger
+    _captionSlide = Tween<Offset>(begin: const Offset(0, 0.4), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.5, 0.8, curve: Curves.easeOutCubic),
+          ),
+        );
     _captionOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.6, 1.0, curve: Curves.easeIn),
+        curve: const Interval(0.5, 0.8, curve: Curves.easeIn),
+      ),
+    );
+
+    // Loading dots fade in last, bottom of screen
+    _dotsOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.7, 1.0, curve: Curves.easeIn),
       ),
     );
 
     _controller.forward();
 
-    // Wait for animation to finish, plus a short hold, then navigate
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    Future.delayed(const Duration(milliseconds: 2700), () {
       if (mounted) {
         _navigateToNext();
       }
@@ -108,7 +149,33 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
   @override
   void dispose() {
     _controller.dispose();
+    _glowController.dispose();
+    _dotsController.dispose();
     super.dispose();
+  }
+
+  Widget _buildDot(int index) {
+    return AnimatedBuilder(
+      animation: _dotsController,
+      builder: (context, child) {
+        final progress = (_dotsController.value - (index * 0.2)) % 1.0;
+        final scale = progress < 0.5
+            ? 0.6 + (progress * 2 * 0.6)
+            : 1.2 - ((progress - 0.5) * 2 * 0.6);
+        return Transform.scale(
+          scale: scale.clamp(0.6, 1.2),
+          child: Container(
+            width: 7,
+            height: 7,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.8),
+              shape: BoxShape.circle,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -119,36 +186,57 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
         backgroundColor: AppColors.creamBg,
         body: SizedBox.expand(
           child: AnimatedBuilder(
-            animation: _controller,
+            animation: Listenable.merge([
+              _controller,
+              _glowController,
+              _dotsController,
+            ]),
             builder: (context, child) {
               return Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Logo
-                  Transform.translate(
-                    // move up by up to 80 pixels
-                    offset: Offset(0, -80 * _logoSlide.value.dy),
-                    child: Transform.scale(
-                      scale: _logoScale.value,
-                      child: Image.asset(
-                        'assets/native_splashlogo/SplashLogo.png',
-                        width: 150,
-                        height: 150,
+                  // Soft pulsing glow behind logo
+                  Transform.scale(
+                    scale: _glowScale.value,
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.white.withValues(
+                              alpha: _glowOpacity.value * 0.35,
+                            ),
+                            Colors.white.withValues(alpha: 0.0),
+                          ],
+                        ),
                       ),
                     ),
                   ),
 
-                  // Text and Caption
-                  Transform.translate(
-                    // starts 80 pixels lower, moves up to 90 pixels below center
-                    offset: Offset(0, 120 - (30 * _textSlide.value.dy)),
-                    child: Opacity(
-                      opacity: _textOpacity.value,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'ArtSharing',
+                  // Logo + text column, centered as a unit
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Opacity(
+                        opacity: _logoOpacity.value,
+                        child: Transform.scale(
+                          scale: _logoScale.value,
+                          child: Image.asset(
+                            'assets/native_splashlogo/SplashLogo.png',
+                            width: 150,
+                            height: 150,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SlideTransition(
+                        position: _textSlide,
+                        child: Opacity(
+                          opacity: _textOpacity.value,
+                          child: Text(
+                            'Vehloom',
                             style: GoogleFonts.inter(
                               fontSize: 40,
                               fontWeight: FontWeight.w800,
@@ -156,20 +244,35 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Opacity(
-                            opacity: _captionOpacity.value,
-                            child: Text(
-                              'Discover & Share Masterpieces',
-                              style: GoogleFonts.inter(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.7),
-                                letterSpacing: -0.2,
-                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SlideTransition(
+                        position: _captionSlide,
+                        child: Opacity(
+                          opacity: _captionOpacity.value,
+                          child: Text(
+                            'Where Creativity Blooms',
+                            style: GoogleFonts.inter(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.7),
+                              letterSpacing: -0.2,
                             ),
                           ),
-                        ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Loading dots, bottom of screen
+                  Positioned(
+                    bottom: 60,
+                    child: Opacity(
+                      opacity: _dotsOpacity.value,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(3, _buildDot),
                       ),
                     ),
                   ),

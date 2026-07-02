@@ -6,6 +6,9 @@ import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/services/preferences_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../../data/repositories/profile_repository.dart';
+import '../../../data/models/profile_model.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -147,6 +150,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         );
       },
+    );
+  }
+
+  void _showBlockedUsersSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _BlockedUsersBottomSheet(),
     );
   }
 
@@ -430,6 +442,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ]),
 
+            // PRIVACY SECTION
+            _buildSectionHeader('Privacy'),
+            _buildCardContainer([
+              _buildListTile(
+                icon: Icons.block,
+                title: 'Blocked Users',
+                onTap: _showBlockedUsersSheet,
+              ),
+            ]),
+
              // PREFERENCES SECTION
             _buildSectionHeader('Preferences'),
             _buildCardContainer([
@@ -620,6 +642,140 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _BlockedUsersBottomSheet extends StatefulWidget {
+  const _BlockedUsersBottomSheet();
+
+  @override
+  State<_BlockedUsersBottomSheet> createState() => _BlockedUsersBottomSheetState();
+}
+
+class _BlockedUsersBottomSheetState extends State<_BlockedUsersBottomSheet> {
+  List<ProfileModel> _blockedProfiles = [];
+  bool _isLoading = true;
+  String? _currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserId = AuthRepository().currentUser?.id;
+    _loadBlockedUsers();
+  }
+
+  Future<void> _loadBlockedUsers() async {
+    if (_currentUserId == null) return;
+    try {
+      final profiles = await ProfileRepository().fetchBlockedProfiles(_currentUserId!);
+      if (mounted) {
+        setState(() {
+          _blockedProfiles = profiles;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _unblockUser(String blockedId) async {
+    if (_currentUserId == null) return;
+    
+    // Optimistic UI update
+    setState(() {
+      _blockedProfiles.removeWhere((p) => p.id == blockedId);
+    });
+
+    await ProfileRepository().unblockUser(_currentUserId!, blockedId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: BoxDecoration(
+        color: AppColors.creamBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Blocked Users',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Divider(color: AppColors.lightGrey, thickness: 1),
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: AppColors.coral))
+                : _blockedProfiles.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No blocked users.',
+                          style: TextStyle(
+                            color: AppColors.darkGrey,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _blockedProfiles.length,
+                        itemBuilder: (context, index) {
+                          final user = _blockedProfiles[index];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: AppColors.darkGrey,
+                              backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                                  ? CachedNetworkImageProvider(user.avatarUrl!)
+                                  : null,
+                              child: user.avatarUrl == null || user.avatarUrl!.isEmpty
+                                  ? const Icon(Icons.person, color: Colors.white)
+                                  : null,
+                            ),
+                            title: Text(
+                              user.displayName ?? user.username,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                              ),
+                            ),
+                            subtitle: Text('@${user.username}', style: TextStyle(color: AppColors.darkGrey)),
+                            trailing: TextButton(
+                              style: TextButton.styleFrom(
+                                backgroundColor: AppColors.coral.withOpacity(0.1),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              onPressed: () => _unblockUser(user.id),
+                              child: Text(
+                                'Unblock',
+                                style: TextStyle(color: AppColors.coral, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
     );
   }
 }

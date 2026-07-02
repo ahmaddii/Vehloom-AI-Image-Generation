@@ -370,7 +370,12 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
     final isLandscape = !_isTopOnePortrait;
 
     return GestureDetector(
-      onTap: () => context.push('/artwork/${topOne.id}'),
+      onTap: () async {
+        await context.push('/artwork/${topOne.id}');
+        if (mounted) {
+          _loadTopArtworks(showLoading: false);
+        }
+      },
       child: Container(
         height: isLandscape ? null : 220,
         decoration: BoxDecoration(
@@ -615,7 +620,12 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
-        onTap: () => context.push('/artwork/${artwork.id}'),
+        onTap: () async {
+          await context.push('/artwork/${artwork.id}');
+          if (mounted) {
+            _loadTopArtworks(showLoading: false);
+          }
+        },
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
