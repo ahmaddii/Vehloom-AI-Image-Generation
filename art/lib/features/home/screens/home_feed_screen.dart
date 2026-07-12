@@ -26,6 +26,7 @@ import '../../../data/repositories/story_repository.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/utils/number_utils.dart';
+import 'package:lottie/lottie.dart';
 
 // Global RouteObserver instance – register this in MaterialApp/GoRouter
 final RouteObserver<ModalRoute<void>> homeRouteObserver =
@@ -446,6 +447,46 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     );
   }
 
+  Widget _buildStoriesSkeleton() {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: 6,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Shimmer.fromColors(
+                baseColor: AppColors.creamDark,
+                highlightColor: AppColors.creamLight,
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Shimmer.fromColors(
+                baseColor: AppColors.creamDark,
+                highlightColor: AppColors.creamLight,
+                child: Container(
+                  width: 40,
+                  height: 10,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // Force rebuild on theme change
@@ -586,17 +627,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
               // Horizontal active creators scroll
               SizedBox(
                 height: 90,
-                child: _creators.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No followed creators yet. Search to find new artists!',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.darkGrey,
-                          ),
-                        ),
-                      )
-                    : ListenableBuilder(
+                child: _isLoading
+                    ? _buildStoriesSkeleton()
+                    : _creators.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No followed creators yet. Search to find new artists!',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.darkGrey,
+                              ),
+                            ),
+                          )
+                        : ListenableBuilder(
                         listenable: PreferencesService(),
                         builder: (context, _) {
                           return ListView.builder(
@@ -1149,6 +1192,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          context.push('/ai-art');
+        },
+        backgroundColor: AppColors.coral,
+        child: Lottie.asset(
+          'assets/lottie/AI Assistant.json',
+          width: 48,
+          height: 48,
+          fit: BoxFit.contain,
+        ),
+        tooltip: 'Generate AI Art',
       ),
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );

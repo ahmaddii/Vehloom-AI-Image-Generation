@@ -26,6 +26,7 @@ import '../../features/story/screens/story_viewer_screen.dart';
 import '../../data/models/story_model.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/home/screens/feed_view_all_screen.dart';
+import '../../features/ai_art/screens/ai_art_generation_screen.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
@@ -131,6 +132,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/feed-view-all',
       builder: (context, state) => const FeedViewAllScreen(),
+    ),
+
+    // AI Art Generation
+    GoRoute(
+      path: '/ai-art',
+      builder: (context, state) => const AiArtGenerationScreen(),
     ),
 
     // Artwork Details
