@@ -431,47 +431,49 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
                             ),
                           ),
                         )
-                      : Column(
+                      : SingleChildScrollView(
                           key: const ValueKey('greeting'),
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Transform.translate(
-                              offset: const Offset(0, -100),
-                              child: Lottie.asset(
-                                'assets/lottie/AI Assistant.json',
-                                width: 180,
-                                height: 180,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            Transform.translate(
-                              offset: const Offset(0, -110),
-                              child: Text(
-                                'What will you create today ?',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: AppColors.darkGrey.withOpacity(0.5),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Transform.translate(
+                                offset: const Offset(0, -100),
+                                child: Lottie.asset(
+                                  'assets/lottie/AI Assistant.json',
+                                  width: 180,
+                                  height: 180,
+                                  fit: BoxFit.contain,
                                 ),
                               ),
-                            ),
-                            Transform.translate(
-                              offset: const Offset(0, -90),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                alignment: WrapAlignment.center,
-                                children: [
-                                  _buildPromptSuggestion('Cyberpunk City'),
-                                  _buildPromptSuggestion('Neon Portrait'),
-                                  _buildPromptSuggestion('Abstract Flow'),
-                                  _buildPromptSuggestion('Anime Art'),
-                                  _buildPromptSuggestion('3D Render'),
-                                ],
+                              Transform.translate(
+                                offset: const Offset(0, -110),
+                                child: Text(
+                                  'What will you create today ?',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: AppColors.darkGrey.withOpacity(0.5),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                              Transform.translate(
+                                offset: const Offset(0, -90),
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    _buildPromptSuggestion('Cyberpunk City'),
+                                    _buildPromptSuggestion('Neon Portrait'),
+                                    _buildPromptSuggestion('Abstract Flow'),
+                                    _buildPromptSuggestion('Anime Art'),
+                                    _buildPromptSuggestion('3D Render'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                 ),
               ),
