@@ -94,6 +94,7 @@ flutter:
       - assets/auth_options/
       - assets/app_icon/
       - assets/native_splashlogo/
+      - assets/view_all_feed/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

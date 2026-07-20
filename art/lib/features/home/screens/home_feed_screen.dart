@@ -23,10 +23,18 @@ import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../data/models/story_model.dart';
 import '../../../data/repositories/story_repository.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:gal/gal.dart';
+import 'explore_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/utils/number_utils.dart';
 import 'package:lottie/lottie.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:gal/gal.dart';
 
 // Global RouteObserver instance – register this in MaterialApp/GoRouter
 final RouteObserver<ModalRoute<void>> homeRouteObserver =
@@ -41,7 +49,8 @@ class HomeFeedScreen extends StatefulWidget {
 
 class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   final List<String> _categories = [
-    'For You',
+    'Community',
+    'Explore',
     'Following',
     'Portrait',
     'Landscape',
@@ -70,7 +79,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     _loadUnreadNotificationsCount();
     _subscribeToNotificationBadge();
     _subscribeToFeedUpdates();
-    
+
     // Request notification permission if not already requested
     PushNotificationService().init().catchError((e) {
       debugPrint('Error initializing push notifications: $e');
@@ -382,9 +391,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     final currentUserId = AuthRepository().currentUser?.id;
 
     switch (_selectedCategoryIndex) {
-      case 0: // For You
+      case 0: // Community
         return _masonryArtworks;
-      case 1: // Following
+      case 1: // Explore
+        return [];
+      case 2: // Following
         if (currentUserId == null) return [];
         final followedIds = _creators
             .where((c) => c.id != currentUserId)
@@ -393,9 +404,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
         return _masonryArtworks
             .where((art) => followedIds.contains(art.userId))
             .toList();
-      case 2: // Portrait
+      case 3: // Portrait
         return _masonryArtworks.where(_isPortraitArtwork).toList();
-      case 3: // Landscape
+      case 4: // Landscape
         return _masonryArtworks.where(_isLandscapeArtwork).toList();
       default:
         return _masonryArtworks;
@@ -474,11 +485,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
               Shimmer.fromColors(
                 baseColor: AppColors.creamDark,
                 highlightColor: AppColors.creamLight,
-                child: Container(
-                  width: 40,
-                  height: 10,
-                  color: Colors.white,
-                ),
+                child: Container(width: 40, height: 10, color: Colors.white),
               ),
             ],
           ),
@@ -526,7 +533,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                         ),
                         children: [
                           TextSpan(
-                            text: 'AI Art',
+                            text: 'Art',
                             style: TextStyle(
                               color: AppColors.coral,
                               fontWeight: FontWeight.bold,
@@ -630,16 +637,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                 child: _isLoading
                     ? _buildStoriesSkeleton()
                     : _creators.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No followed creators yet. Search to find new artists!',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.darkGrey,
-                              ),
-                            ),
-                          )
-                        : ListenableBuilder(
+                    ? Center(
+                        child: Text(
+                          'No followed creators yet. Search to find new artists!',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.darkGrey,
+                          ),
+                        ),
+                      )
+                    : ListenableBuilder(
                         listenable: PreferencesService(),
                         builder: (context, _) {
                           return ListView.builder(
@@ -845,9 +852,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                       padding: const EdgeInsets.only(right: 8),
                       child: GestureDetector(
                         onTap: () {
-                          setState(() {
-                            _selectedCategoryIndex = index;
-                          });
+                          if (index == 1) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ExploreScreen(),
+                              ),
+                            );
+                          } else {
+                            setState(() {
+                              _selectedCategoryIndex = index;
+                            });
+                          }
                         },
                         child: Container(
                           padding: EdgeInsets.symmetric(
@@ -949,7 +965,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                               }
                                             },
                                             onTap: () async {
-                                              await context.push('/artwork/${artwork.id}');
+                                              await context.push(
+                                                '/artwork/${artwork.id}',
+                                              );
                                               if (mounted) {
                                                 _loadData(showLoading: false);
                                               }

@@ -16,7 +16,9 @@ class MyApp extends StatelessWidget {
           title: 'Art Sharing',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          themeMode: preferences.darkModeEnabled ? ThemeMode.dark : ThemeMode.light,
+          themeMode: preferences.darkModeEnabled
+              ? ThemeMode.dark
+              : ThemeMode.light,
           routerConfig: appRouter,
           debugShowCheckedModeBanner: false,
         );

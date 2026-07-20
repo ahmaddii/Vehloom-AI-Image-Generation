@@ -20,7 +20,11 @@ Future<void> main() async {
   );
   await dotenv.load(fileName: ".env");
 
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
+  }
 
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,

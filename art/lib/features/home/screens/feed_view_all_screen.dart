@@ -30,6 +30,7 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
   bool _isLoadingMore = false;
   int _currentOffset = 0;
   bool _hasMore = true;
+  bool _showTopBanner = true;
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
   RealtimeChannel? _feedChannel;
   final ScrollController _scrollController = ScrollController();
@@ -210,6 +211,64 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
         color: AppColors.creamBg,
         child: Column(
           children: [
+            // Top Banner Area (Carousel + Right Portrait Image)
+            if (_showTopBanner)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                child: SizedBox(
+                  height: 180, // Total height for the top section
+                  child: Row(
+                    children: [
+                      // Carousel on the left
+                      Expanded(
+                        flex: 2, // Takes 2/3 of the width
+                        child: ContinuousImageScroll(
+                          onClose: () {
+                            setState(() {
+                              _showTopBanner = false;
+                            });
+                          },
+                          imageUrls: const [
+                            'assets/view_all_feed/v1.png',
+                            'assets/view_all_feed/v2.png',
+                            'assets/view_all_feed/v3.png',
+                            'assets/view_all_feed/v4.png',
+                            'assets/view_all_feed/v5.png',
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Portrait grid on the right
+                      Expanded(
+                        flex: 1, // Takes 1/3 of the width
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16.0),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16.0),
+                            child: Image.asset(
+                              'assets/view_all_feed/right.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: AppColors.creamDark,
+                                child: const Center(child: Icon(Icons.error_outline)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Expanded(
               child: _isLoading
                   ? _buildSkeletonGrid()
@@ -267,6 +326,144 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
         ),
       ),
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
+    );
+  }
+}
+
+class ContinuousImageScroll extends StatefulWidget {
+  final List<String> imageUrls;
+  final VoidCallback? onClose;
+
+  const ContinuousImageScroll({
+    super.key, 
+    required this.imageUrls,
+    this.onClose,
+  });
+
+  @override
+  State<ContinuousImageScroll> createState() => _ContinuousImageScrollState();
+}
+
+class _ContinuousImageScrollState extends State<ContinuousImageScroll> {
+  late PageController _pageController;
+  int _currentPage = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(); // Default viewportFraction is 1.0
+    _timer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
+      if (_pageController.hasClients) {
+        setState(() {
+          if (_currentPage < widget.imageUrls.length - 1) {
+            _currentPage++;
+          } else {
+            _currentPage = 0;
+          }
+        });
+        _pageController.animateToPage(
+          _currentPage,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.imageUrls.isEmpty) return const SizedBox.shrink();
+    
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16.0),
+        child: Stack(
+          children: [
+            // The Carousel Images
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: (int page) {
+                setState(() {
+                  _currentPage = page;
+                });
+              },
+              itemCount: widget.imageUrls.length,
+              itemBuilder: (context, index) {
+                return Image.asset(
+                  widget.imageUrls[index],
+                  fit: BoxFit.cover, // Fills the container perfectly
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: AppColors.creamDark,
+                    child: const Center(child: Icon(Icons.error_outline)),
+                  ),
+                );
+              },
+            ),
+            // Optional Close Button
+            if (widget.onClose != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: widget.onClose,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            // The Indicator Dots
+            Positioned(
+              bottom: 12,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.imageUrls.length, (index) {
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                    width: _currentPage == index ? 12.0 : 8.0,
+                    height: 8.0,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(4.0),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
