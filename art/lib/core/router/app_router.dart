@@ -27,6 +27,8 @@ import '../../data/models/story_model.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/home/screens/feed_view_all_screen.dart';
 import '../../features/ai_art/screens/ai_art_generation_screen.dart';
+import '../../features/chat/screens/inbox_screen.dart';
+import '../../features/chat/screens/chat_screen.dart';
 
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
@@ -211,6 +213,20 @@ final GoRouter appRouter = GoRouter(
           stories: stories,
           initialUserId: userId,
         );
+      },
+    ),
+
+    // Chat
+    GoRoute(
+      path: '/inbox',
+      builder: (context, state) => const InboxScreen(),
+    ),
+    GoRoute(
+      path: '/chat/:roomId',
+      builder: (context, state) {
+        final roomId = state.pathParameters['roomId'] ?? '';
+        final otherUserId = state.uri.queryParameters['otherUserId'] ?? '';
+        return ChatScreen(roomId: roomId, otherUserId: otherUserId);
       },
     ),
   ],

@@ -217,54 +217,18 @@ class _FeedViewAllScreenState extends State<FeedViewAllScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                 child: SizedBox(
                   height: 180, // Total height for the top section
-                  child: Row(
-                    children: [
-                      // Carousel on the left
-                      Expanded(
-                        flex: 2, // Takes 2/3 of the width
-                        child: ContinuousImageScroll(
-                          onClose: () {
-                            setState(() {
-                              _showTopBanner = false;
-                            });
-                          },
-                          imageUrls: const [
-                            'assets/view_all_feed/v1.png',
-                            'assets/view_all_feed/v2.png',
-                            'assets/view_all_feed/v3.png',
-                            'assets/view_all_feed/v4.png',
-                            'assets/view_all_feed/v5.png',
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Portrait grid on the right
-                      Expanded(
-                        flex: 1, // Takes 1/3 of the width
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16.0),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16.0),
-                            child: Image.asset(
-                              'assets/view_all_feed/right.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: AppColors.creamDark,
-                                child: const Center(child: Icon(Icons.error_outline)),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                  child: ContinuousImageScroll(
+                    onClose: () {
+                      setState(() {
+                        _showTopBanner = false;
+                      });
+                    },
+                    imageUrls: const [
+                      'assets/view_all_feed/v1.png',
+                      'assets/view_all_feed/v2.png',
+                      'assets/view_all_feed/v3.png',
+                      'assets/view_all_feed/v4.png',
+                      'assets/view_all_feed/v5.png',
                     ],
                   ),
                 ),
@@ -416,6 +380,38 @@ class _ContinuousImageScrollState extends State<ContinuousImageScroll> {
                   ),
                 );
               },
+            ),
+            // Location Badge
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Tokyo',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             // Optional Close Button
             if (widget.onClose != null)

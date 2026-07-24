@@ -5,6 +5,8 @@ class ProfileModel {
   final String? avatarUrl;
   final String? bio;
   final DateTime createdAt;
+  final bool isOnline;
+  final DateTime? lastSeen;
 
   ProfileModel({
     required this.id,
@@ -13,6 +15,8 @@ class ProfileModel {
     this.avatarUrl,
     this.bio,
     required this.createdAt,
+    this.isOnline = false,
+    this.lastSeen,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +27,10 @@ class ProfileModel {
       avatarUrl: json['avatar_url'] as String?,
       bio: json['bio'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
+      isOnline: json['is_online'] as bool? ?? false,
+      lastSeen: json['last_seen'] != null
+          ? DateTime.parse(json['last_seen'] as String)
+          : null,
     );
   }
 
@@ -34,6 +42,8 @@ class ProfileModel {
       'avatar_url': avatarUrl,
       'bio': bio,
       'created_at': createdAt.toIso8601String(),
+      'is_online': isOnline,
+      'last_seen': lastSeen?.toIso8601String(),
     };
   }
 
@@ -44,6 +54,8 @@ class ProfileModel {
     String? avatarUrl,
     String? bio,
     DateTime? createdAt,
+    bool? isOnline,
+    DateTime? lastSeen,
   }) {
     return ProfileModel(
       id: id ?? this.id,
@@ -52,6 +64,8 @@ class ProfileModel {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       bio: bio ?? this.bio,
       createdAt: createdAt ?? this.createdAt,
+      isOnline: isOnline ?? this.isOnline,
+      lastSeen: lastSeen ?? this.lastSeen,
     );
   }
 }

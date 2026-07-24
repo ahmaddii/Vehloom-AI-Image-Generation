@@ -368,7 +368,7 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 36),
                       ],
                     ),
                   ),

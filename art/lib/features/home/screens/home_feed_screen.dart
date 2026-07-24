@@ -15,6 +15,7 @@ import '../../../data/models/artwork_model.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/notification_repository.dart';
+import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
@@ -608,9 +609,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                               ),
                           ],
                         ),
-                        SizedBox(width: 12),
-
-                        // Search button
+                        const SizedBox(width: 12),
+                        // Inbox button
                         Container(
                           decoration: BoxDecoration(
                             color: AppColors.creamLight,
@@ -618,11 +618,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                           ),
                           child: IconButton(
                             icon: Icon(
-                              Icons.search_outlined,
+                              Icons.chat_bubble_outline,
                               color: AppColors.black,
-                              size: 24,
+                              size: 22,
                             ),
-                            onPressed: () => context.push('/search'),
+                            onPressed: () => context.push('/inbox'),
                           ),
                         ),
                       ],
@@ -682,7 +682,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                       if (isMe) {
                                         _showMyStoryOptions();
                                       } else {
-                                        context.push('/profile/${creator.id}');
+                                        _showCreatorOptions(creator);
                                       }
                                     }
                                   },
@@ -1225,6 +1225,90 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
         tooltip: 'Generate AI Art',
       ),
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
+    );
+  }
+
+  void _showCreatorOptions(ProfileModel creator) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.creamBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.lightGrey,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              SizedBox(height: 24),
+              Text(
+                creator.displayName ?? creator.username,
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 24),
+              ListTile(
+                leading: Icon(Icons.person_outline, color: AppColors.black),
+                title: Text(
+                  'View Profile',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/profile/${creator.id}');
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Icon(
+                  Icons.chat_bubble_outline,
+                  color: AppColors.coral,
+                ),
+                title: Text(
+                  'Message',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final currentUserId = AuthRepository().currentUser?.id;
+                  if (currentUserId == null) return;
+                  final repo = ChatRepository();
+                  final room = await repo.createOrGetChatRoom(
+                    currentUserId,
+                    creator.id,
+                  );
+                  if (context.mounted) {
+                    context.push('/chat/${room.id}?otherUserId=${creator.id}');
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 

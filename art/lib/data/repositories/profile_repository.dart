@@ -220,4 +220,18 @@ class ProfileRepository {
       return [];
     }
   }
+
+  Future<List<ProfileModel>> getFollowing(String userId) async {
+    try {
+      final res = await _client.from('follows').select('following_id').eq('follower_id', userId);
+      if (res.isEmpty) return [];
+      
+      final ids = (res as List).map((e) => e['following_id'] as String).toList();
+      final profilesRes = await _client.from('profiles').select().inFilter('id', ids);
+      
+      return (profilesRes as List).map((p) => ProfileModel.fromJson(p)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 }

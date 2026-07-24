@@ -102,4 +102,21 @@ class PreferencesService extends ChangeNotifier {
     }
     return false;
   }
+
+  // Chat Room unread state
+  void markRoomRead(String roomId) {
+    if (!_isInitialized) return;
+    _prefs.setString('room_read_$roomId', DateTime.now().toIso8601String());
+    notifyListeners();
+  }
+
+  bool isRoomUnread(String roomId, DateTime? lastUpdated) {
+    if (!_isInitialized || lastUpdated == null) return false;
+    final lastReadStr = _prefs.getString('room_read_$roomId');
+    if (lastReadStr == null)
+      return true; // locally never read, so consider unread if there's a lastUpdated
+
+    final lastRead = DateTime.parse(lastReadStr);
+    return lastUpdated.isAfter(lastRead);
+  }
 }

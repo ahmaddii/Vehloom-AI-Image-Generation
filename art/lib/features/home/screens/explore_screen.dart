@@ -10,6 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 
@@ -47,7 +48,7 @@ class _ExploreScreenState extends State<ExploreScreen>
     final sorts = ['Most Reactions', 'Most Comments', 'Newest'];
     final periods = ['Day', 'Week', 'Month', 'AllTime'];
     final random = Random();
-    
+
     _currentSort = sorts[random.nextInt(sorts.length)];
     if (_currentSort != 'Newest') {
       _currentPeriod = periods[random.nextInt(periods.length)];
@@ -58,7 +59,28 @@ class _ExploreScreenState extends State<ExploreScreen>
   void initState() {
     super.initState();
     _randomizeFeed();
-    _fetchImages(initial: true);
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await _loadCachedImages();
+    _fetchImages(isFirstLoad: true);
+  }
+
+  Future<void> _loadCachedImages() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedStr = prefs.getString('cached_explore_images');
+      if (cachedStr != null) {
+        final List decoded = json.decode(cachedStr);
+        if (mounted) {
+          setState(() {
+            _images.addAll(decoded);
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -82,12 +104,12 @@ class _ExploreScreenState extends State<ExploreScreen>
     return Uri.parse(_baseUrl).replace(queryParameters: params);
   }
 
-  Future<void> _fetchImages({bool initial = false}) async {
+  Future<void> _fetchImages({bool isFirstLoad = false}) async {
     if (_isLoadingMore || !_hasMore) return;
 
     setState(() {
-      if (initial) _isLoading = true;
-      _isLoadingMore = true;
+      if (isFirstLoad && _images.isEmpty) _isLoading = true;
+      if (!isFirstLoad) _isLoadingMore = true;
       _errorMessage = null;
     });
 
@@ -113,12 +135,21 @@ class _ExploreScreenState extends State<ExploreScreen>
         final nextCursor = data['metadata']?['nextCursor'] as String?;
 
         setState(() {
+          if (isFirstLoad) {
+            _images.clear();
+          }
           _images.addAll(items);
           _nextCursor = nextCursor;
           _hasMore = nextCursor != null && items.isNotEmpty;
           _isLoading = false;
           _isLoadingMore = false;
         });
+
+        if (isFirstLoad && items.isNotEmpty) {
+          SharedPreferences.getInstance().then((prefs) {
+            prefs.setString('cached_explore_images', json.encode(items));
+          });
+        }
       } else {
         setState(() {
           _errorMessage =
@@ -143,7 +174,7 @@ class _ExploreScreenState extends State<ExploreScreen>
       _nextCursor = null;
       _hasMore = true;
     });
-    await _fetchImages(initial: true);
+    await _fetchImages(isFirstLoad: true);
   }
 
   @override
@@ -238,11 +269,12 @@ class _ExploreScreenState extends State<ExploreScreen>
                               CachedNetworkImage(
                                 imageUrl: imageUrl,
                                 fit: BoxFit.cover,
-                                placeholder: (context, url) => Shimmer.fromColors(
-                                  baseColor: AppColors.creamDark,
-                                  highlightColor: AppColors.creamLight,
-                                  child: Container(color: Colors.white),
-                                ),
+                                placeholder: (context, url) =>
+                                    Shimmer.fromColors(
+                                      baseColor: AppColors.creamDark,
+                                      highlightColor: AppColors.creamLight,
+                                      child: Container(color: Colors.white),
+                                    ),
                                 errorWidget: (context, url, error) =>
                                     const Icon(Icons.error),
                               ),
@@ -252,23 +284,42 @@ class _ExploreScreenState extends State<ExploreScreen>
                                 child: GestureDetector(
                                   onTap: () async {
                                     try {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Downloading...')),
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Downloading...'),
+                                        ),
                                       );
-                                      final response = await http.get(Uri.parse(imageUrl));
-                                      final directory = await getTemporaryDirectory();
-                                      final file = File('${directory.path}/explore_img_${img['id']}.jpg');
-                                      await file.writeAsBytes(response.bodyBytes);
+                                      final response = await http.get(
+                                        Uri.parse(imageUrl),
+                                      );
+                                      final directory =
+                                          await getTemporaryDirectory();
+                                      final file = File(
+                                        '${directory.path}/explore_img_${img['id']}.jpg',
+                                      );
+                                      await file.writeAsBytes(
+                                        response.bodyBytes,
+                                      );
                                       await Gal.putImage(file.path);
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Saved to Gallery!')),
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Saved to Gallery!'),
+                                          ),
                                         );
                                       }
                                     } catch (e) {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Failed to download')),
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Failed to download'),
+                                          ),
                                         );
                                       }
                                     }
@@ -328,10 +379,7 @@ class _ExploreScreenState extends State<ExploreScreen>
             child: Shimmer.fromColors(
               baseColor: AppColors.creamDark,
               highlightColor: AppColors.creamLight,
-              child: Container(
-                height: height,
-                color: Colors.white,
-              ),
+              child: Container(height: height, color: Colors.white),
             ),
           );
         },
