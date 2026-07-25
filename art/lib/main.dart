@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'core/services/preferences_service.dart';
-import 'core/services/push_notification_service.dart';
+import 'core/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +33,9 @@ Future<void> main() async {
 
   // Initialize global persistent user preferences
   await PreferencesService().init();
+
+  // Initialize notifications
+  await NotificationService().init();
 
   runApp(const MyApp());
 }

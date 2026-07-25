@@ -6,6 +6,7 @@ class MessageModel {
   final String content;
   final DateTime timestamp;
   final MessageStatus status;
+  final bool isRead;
 
   MessageModel({
     required this.id,
@@ -13,6 +14,7 @@ class MessageModel {
     required this.content,
     required this.timestamp,
     this.status = MessageStatus.sent,
+    this.isRead = false,
   });
 
   factory MessageModel.fromMap(Map<String, dynamic> data, String id) {
@@ -24,6 +26,7 @@ class MessageModel {
           ? DateTime.tryParse(data['timestamp'].toString()) ?? DateTime.now()
           : DateTime.now(),
       status: MessageStatus.sent, // Messages from DB are considered sent
+      isRead: data['isRead'] == true,
     );
   }
 
@@ -33,6 +36,7 @@ class MessageModel {
       'senderId': senderId,
       'content': content,
       'timestamp': timestamp.toIso8601String(),
+      'isRead': isRead,
       // status is transient and not saved to the DB
     };
   }
@@ -43,6 +47,7 @@ class MessageModel {
     String? content,
     DateTime? timestamp,
     MessageStatus? status,
+    bool? isRead,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -50,6 +55,7 @@ class MessageModel {
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
       status: status ?? this.status,
+      isRead: isRead ?? this.isRead,
     );
   }
 }

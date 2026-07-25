@@ -84,7 +84,43 @@ class ChatRepository {
     // Update room
     await _supabase.from('chatRooms').update({
       'lastMessage': text,
+      'lastMessageSenderId': senderId,
+      'lastMessageRead': false,
       'lastUpdated': now.toIso8601String(),
     }).eq('id', roomId);
+  }
+
+  Future<void> upsertDeviceToken(String userId, String token) async {
+    final Map<String, dynamic> data = {
+      'user_id': userId,
+      'token': token,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    await _supabase.from('device_tokens').upsert(
+      data,
+      onConflict: 'user_id, token',
+    );
+  }
+
+  Future<void> removeDeviceToken(String token) async {
+    await _supabase.from('device_tokens').delete().eq('token', token);
+  }
+
+  Future<void> markRoomAsRead(String roomId, String currentUserId) async {
+    // 1. Mark unread messages sent to me in this room as read
+    await _supabase
+        .from('messages')
+        .update({'isRead': true})
+        .eq('roomId', roomId)
+        .neq('senderId', currentUserId)
+        .eq('isRead', false);
+
+    // 2. Mark the room's last message as read if it was sent by the other person
+    await _supabase
+        .from('chatRooms')
+        .update({'lastMessageRead': true})
+        .eq('id', roomId)
+        .neq('lastMessageSenderId', currentUserId);
   }
 }

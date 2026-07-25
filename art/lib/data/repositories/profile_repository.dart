@@ -19,6 +19,26 @@ class ProfileRepository {
     }
   }
 
+  Stream<ProfileModel?> getProfileStream(String id) {
+    return _client
+        .from('profiles')
+        .stream(primaryKey: ['id'])
+        .eq('id', id)
+        .map((maps) {
+          if (maps.isEmpty) return null;
+          return ProfileModel.fromJson(maps.first);
+        });
+  }
+
+  Future<void> updatePresence(String userId, bool isOnline) async {
+    try {
+      await _client.from('profiles').update({
+        'is_online': isOnline,
+        'last_seen': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', userId);
+    } catch (_) {}
+  }
+
   Future<ProfileModel?> getProfileByUsername(String username) async {
     try {
       final response = await _client

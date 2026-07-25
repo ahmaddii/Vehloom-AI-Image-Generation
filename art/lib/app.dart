@@ -3,8 +3,46 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/preferences_service.dart';
 
-class MyApp extends StatelessWidget {
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'data/repositories/profile_repository.dart';
+
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _updatePresence(true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _updatePresence(true);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _updatePresence(false);
+    }
+  }
+
+  void _updatePresence(bool isOnline) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      ProfileRepository().updatePresence(user.id, isOnline);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
