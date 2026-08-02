@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,6 +9,14 @@ import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../core/services/notification_service.dart';
 import 'package:uuid/uuid.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import '../../../data/models/artwork_model.dart';
+import '../../../data/repositories/artwork_repository.dart';
+import '../widgets/chat_emoji_picker.dart';
+import '../widgets/message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
   final String roomId;
@@ -26,6 +35,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _chatRepo = ChatRepository();
   final _profileRepo = ProfileRepository();
+  final _artworkRepo = ArtworkRepository();
   final _currentUserId = Supabase.instance.client.auth.currentUser?.id;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -35,12 +45,27 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<MessageModel> _optimisticMessages = [];
 
   ProfileModel? _otherUserProfile;
-  bool _isLoadingProfile = true;
   StreamSubscription<ProfileModel?>? _profileSub;
 
   // BUG FIX: previously nothing stopped a user from double-tapping send,
   // which could fire two network requests for the same text.
   bool _isSending = false;
+
+  MessageModel? _replyingTo;
+
+  int _messageLimit = 30;
+  RealtimeChannel? _typingChannel;
+  bool _isMeTyping = false;
+  bool _otherUserIsTyping = false;
+  Timer? _typingTimer;
+  Timer? _otherUserTypingTimer;
+  Timer? _readMarkTimer;
+  bool _showEmojiPicker = false;
+  bool _isLoadingMore = false;
+
+  final Map<String, ArtworkModel?> _artworkCache = {};
+  final Map<String, ProfileModel?> _profileCache = {};
+  final Set<String> _prefetchInFlight = {};
 
   @override
   void initState() {
@@ -54,16 +79,85 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     NotificationService().currentActiveRoomId = widget.roomId;
+
+    _setupTypingChannel();
+
+    _scrollController.addListener(() {
+      if (_isLoadingMore) return;
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        _isLoadingMore = true;
+        setState(() {
+          _messageLimit += 30;
+        });
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) _isLoadingMore = false;
+        });
+      }
+    });
+  }
+
+  void _setupTypingChannel() {
+    _typingChannel = Supabase.instance.client.channel(
+      'typing_${widget.roomId}',
+    );
+    _typingChannel!
+        .onBroadcast(
+          event: 'typing',
+          callback: (payload) {
+            final userId = payload['userId'];
+            final isTyping = payload['isTyping'] as bool? ?? false;
+
+            if (userId != _currentUserId && mounted) {
+              _otherUserTypingTimer?.cancel();
+              setState(() {
+                _otherUserIsTyping = isTyping;
+              });
+
+              if (isTyping) {
+                _otherUserTypingTimer = Timer(const Duration(seconds: 3), () {
+                  if (mounted && _otherUserIsTyping) {
+                    setState(() {
+                      _otherUserIsTyping = false;
+                    });
+                  }
+                });
+              }
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  void _onMessageChanged(String text) {
+    if (!_isMeTyping) {
+      _isMeTyping = true;
+      _typingChannel?.sendBroadcastMessage(
+        event: 'typing',
+        payload: {'userId': _currentUserId, 'isTyping': true},
+      );
+    }
+
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      _isMeTyping = false;
+      _typingChannel?.sendBroadcastMessage(
+        event: 'typing',
+        payload: {'userId': _currentUserId, 'isTyping': false},
+      );
+    });
   }
 
   void _loadProfile() {
-    _profileSub = _profileRepo.getProfileStream(widget.otherUserId).listen((profile) {
+    _profileSub = _profileRepo.getProfileStream(widget.otherUserId).listen((
+      profile,
+    ) {
       if (mounted) {
         setState(() {
           if (profile != null) {
             _otherUserProfile = profile;
           }
-          _isLoadingProfile = false;
         });
       }
     });
@@ -76,6 +170,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _isSending = true;
     _messageController.clear();
 
+    final replyId = _replyingTo?.id;
+    final replyContent = _replyingTo?.content;
+
+    setState(() {
+      _replyingTo = null;
+    });
+
     final messageId = const Uuid().v4();
     final optimisticMsg = MessageModel(
       id: messageId,
@@ -83,6 +184,8 @@ class _ChatScreenState extends State<ChatScreen> {
       content: text,
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
+      replyToId: replyId,
+      replyToContent: replyContent,
     );
 
     setState(() {
@@ -97,6 +200,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _currentUserId,
         text,
         id: messageId,
+        replyToId: replyId,
+        replyToContent: replyContent,
       );
       // PreferencesService().markRoomRead(widget.roomId); // Removed
       _updateOptimisticStatus(messageId, MessageStatus.sent);
@@ -104,6 +209,63 @@ class _ChatScreenState extends State<ChatScreen> {
       _updateOptimisticStatus(messageId, MessageStatus.error);
     } finally {
       _isSending = false;
+    }
+  }
+
+  Future<void> _pickAndSendImage() async {
+    if (_currentUserId == null || _isSending) return;
+
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (pickedFile == null) return;
+
+    setState(() {
+      _isSending = true;
+    });
+
+    final messageId = const Uuid().v4();
+    final optimisticMsg = MessageModel(
+      id: messageId,
+      senderId: _currentUserId,
+      content: 'Sent an image',
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending,
+    );
+
+    setState(() {
+      _optimisticMessages.insert(0, optimisticMsg);
+    });
+
+    _scrollToBottom();
+
+    try {
+      final file = File(pickedFile.path);
+      final imageUrl = await _chatRepo.uploadImage(file);
+      await _chatRepo.sendMessage(
+        widget.roomId,
+        _currentUserId,
+        'Sent an image',
+        id: messageId,
+        imageUrl: imageUrl,
+      );
+      _updateOptimisticStatus(messageId, MessageStatus.sent);
+    } catch (e) {
+      _updateOptimisticStatus(messageId, MessageStatus.error);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to send image')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
     }
   }
 
@@ -132,6 +294,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _retryMessage(MessageModel message) {
+    if (message.imageUrl != null || message.content == 'Sent an image') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select and send the image again.'),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       final index = _optimisticMessages.indexWhere((m) => m.id == message.id);
       if (index != -1) {
@@ -150,6 +321,8 @@ class _ChatScreenState extends State<ChatScreen> {
         message.senderId,
         message.content,
         id: message.id,
+        replyToId: message.replyToId,
+        replyToContent: message.replyToContent,
       );
       _updateOptimisticStatus(message.id, MessageStatus.sent);
     } catch (e) {
@@ -191,11 +364,48 @@ class _ChatScreenState extends State<ChatScreen> {
         (m) => !m.isRead && m.senderId != userId,
       );
       if (hasUnreadFromOther) {
-        _chatRepo.markRoomAsRead(widget.roomId, userId);
+        _readMarkTimer?.cancel();
+        _readMarkTimer = Timer(const Duration(milliseconds: 400), () {
+          _chatRepo.markRoomAsRead(widget.roomId, userId);
+        });
       }
     }
 
     return merged;
+  }
+
+  void _prefetchSharedContent(List<MessageModel> messages) {
+    for (final msg in messages) {
+      final artworkId = msg.sharedArtworkId;
+      if (artworkId != null &&
+          !_artworkCache.containsKey(artworkId) &&
+          !_prefetchInFlight.contains('artwork:$artworkId')) {
+        _prefetchInFlight.add('artwork:$artworkId');
+        _artworkRepo
+            .getArtwork(artworkId)
+            .then((artwork) {
+              if (mounted) {
+                setState(() => _artworkCache[artworkId] = artwork);
+              }
+            })
+            .whenComplete(() => _prefetchInFlight.remove('artwork:$artworkId'));
+      }
+
+      final profileId = msg.sharedProfileId;
+      if (profileId != null &&
+          !_profileCache.containsKey(profileId) &&
+          !_prefetchInFlight.contains('profile:$profileId')) {
+        _prefetchInFlight.add('profile:$profileId');
+        _profileRepo
+            .getProfile(profileId)
+            .then((profile) {
+              if (mounted) {
+                setState(() => _profileCache[profileId] = profile);
+              }
+            })
+            .whenComplete(() => _prefetchInFlight.remove('profile:$profileId'));
+      }
+    }
   }
 
   String _exactTime(DateTime time) {
@@ -231,6 +441,19 @@ class _ChatScreenState extends State<ChatScreen> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
+  String _formatLastSeen(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final that = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(that).inDays;
+
+    final time = _exactTime(date);
+    if (diff == 0) return 'Last seen today at $time';
+    if (diff == 1) return 'Last seen yesterday at $time';
+
+    return 'Last seen ${_dateLabel(date)}';
+  }
+
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -245,6 +468,10 @@ class _ChatScreenState extends State<ChatScreen> {
     // build/dispose pass has fully unlocked.
     // Removed old PreferencesService read marking
     _profileSub?.cancel();
+    _typingTimer?.cancel();
+    _otherUserTypingTimer?.cancel();
+    _readMarkTimer?.cancel();
+    _typingChannel?.unsubscribe();
     NotificationService().currentActiveRoomId = null;
     _messageController.dispose();
     _scrollController.dispose();
@@ -273,7 +500,7 @@ class _ChatScreenState extends State<ChatScreen> {
             CircleAvatar(
               radius: 24,
               backgroundImage: avatarUrl != null
-                  ? NetworkImage(avatarUrl)
+                  ? CachedNetworkImageProvider(avatarUrl)
                   : null,
               backgroundColor: AppColors.creamDark,
               child: avatarUrl == null
@@ -302,15 +529,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         const PulsingCircle(color: Colors.green),
                         const Text(
                           'Online',
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: Colors.green, fontSize: 12),
                         ),
                       ] else ...[
                         const PulsingCircle(color: Colors.red),
                         Text(
-                          'Offline',
+                          _otherUserProfile?.lastSeen != null
+                              ? _formatLastSeen(_otherUserProfile!.lastSeen!)
+                              : 'Offline',
                           style: TextStyle(
                             color: AppColors.lightGrey,
                             fontSize: 12,
@@ -319,6 +545,16 @@ class _ChatScreenState extends State<ChatScreen> {
                       ],
                     ],
                   ),
+                  if (_otherUserIsTyping)
+                    const Text(
+                      'Typing...',
+                      style: TextStyle(
+                        color: AppColors.coral,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -337,39 +573,39 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
-              stream: _chatRepo.getMessages(widget.roomId),
+              stream: _chatRepo.getMessages(
+                widget.roomId,
+                currentUserId: _currentUserId,
+                limit: _messageLimit,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return const Center(child: Text('Error loading messages'));
                 }
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return const SizedBox.shrink();
                 }
 
                 final streamMessages = snapshot.data ?? [];
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _prefetchSharedContent(streamMessages);
+                });
                 final allMessages = _mergeAndScheduleCleanup(streamMessages);
-
-                if (allMessages.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'Say hi 👋',
-                      style: TextStyle(
-                        color: AppColors.lightGrey,
-                        fontSize: 14,
-                      ),
-                    ),
-                  );
-                }
 
                 return ListView.builder(
                   controller: _scrollController,
                   reverse: true, // newest message at the bottom
+                  cacheExtent: 400,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
                   ),
-                  itemCount: allMessages.length,
+                  itemCount: allMessages.length + 1,
                   itemBuilder: (context, index) {
+                    if (index == allMessages.length) {
+                      return _buildProfileHeader();
+                    }
                     final msg = allMessages[index];
                     final isMe = msg.senderId == _currentUserId;
 
@@ -393,14 +629,52 @@ class _ChatScreenState extends State<ChatScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: isMe
                             ? [
-                                _buildBubble(msg, isMe),
+                                MessageBubble(
+                                  msg: msg,
+                                  isMe: isMe,
+                                  currentUserId: _currentUserId,
+                                  cachedArtwork: msg.sharedArtworkId != null
+                                      ? _artworkCache[msg.sharedArtworkId]
+                                      : null,
+                                  cachedProfile: msg.sharedProfileId != null
+                                      ? _profileCache[msg.sharedProfileId]
+                                      : null,
+                                  onLongPress: () =>
+                                      _showMessageActions(msg, isMe),
+                                  onReactionTap: (emoji) {
+                                    _chatRepo.toggleReaction(
+                                      msg.id,
+                                      _currentUserId,
+                                      emoji,
+                                    );
+                                  },
+                                ),
                                 const SizedBox(width: 6),
                                 _buildTimeAndStatus(msg, isMe),
                               ]
                             : [
                                 _buildTimeAndStatus(msg, isMe),
                                 const SizedBox(width: 6),
-                                _buildBubble(msg, isMe),
+                                MessageBubble(
+                                  msg: msg,
+                                  isMe: isMe,
+                                  currentUserId: _currentUserId,
+                                  cachedArtwork: msg.sharedArtworkId != null
+                                      ? _artworkCache[msg.sharedArtworkId]
+                                      : null,
+                                  cachedProfile: msg.sharedProfileId != null
+                                      ? _profileCache[msg.sharedProfileId]
+                                      : null,
+                                  onLongPress: () =>
+                                      _showMessageActions(msg, isMe),
+                                  onReactionTap: (emoji) {
+                                    _chatRepo.toggleReaction(
+                                      msg.id,
+                                      _currentUserId,
+                                      emoji,
+                                    );
+                                  },
+                                ),
                               ],
                       ),
                     );
@@ -441,96 +715,203 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
+          if (_replyingTo != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: AppColors.creamLight,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: const Border(
+                          left: BorderSide(color: AppColors.coral, width: 4),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Replying to message',
+                            style: TextStyle(
+                              color: AppColors.coral,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _replyingTo!.content,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.darkGrey,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: AppColors.lightGrey),
+                    onPressed: () {
+                      setState(() {
+                        _replyingTo = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+
           // Chat Input Area
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             color: AppColors.creamBg,
             child: SafeArea(
               top: false,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Message...',
-                        hintStyle: TextStyle(color: AppColors.lightGrey),
-                        filled: true,
-                        fillColor: AppColors.creamLight,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(50),
-                          borderSide: BorderSide.none,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.image_outlined,
+                          color: AppColors.coral,
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(50),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(50),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
+                        onPressed: _pickAndSendImage,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
                         ),
                       ),
-                      textCapitalization: TextCapitalization.sentences,
-                      textInputAction: TextInputAction.newline,
-                      minLines: 1,
-                      maxLines: 5,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    height: 48,
-                    width: 48,
-                    decoration: const BoxDecoration(
-                      color: AppColors.coral,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          onChanged: _onMessageChanged,
+                          onTap: () {
+                            if (_showEmojiPicker) {
+                              setState(() => _showEmojiPicker = false);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Message...',
+                            hintStyle: TextStyle(color: AppColors.lightGrey),
+                            filled: true,
+                            fillColor: AppColors.creamLight,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 10,
+                            ),
+                          ),
+                          textCapitalization: TextCapitalization.sentences,
+                          textInputAction: TextInputAction.newline,
+                          minLines: 1,
+                          maxLines: 5,
+                        ),
                       ),
-                      onPressed: _sendMessage,
-                    ),
+                      IconButton(
+                        icon: Icon(
+                          _showEmojiPicker
+                              ? Icons.keyboard_outlined
+                              : Icons.emoji_emotions_outlined,
+                          color: AppColors.coral,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _showEmojiPicker = !_showEmojiPicker;
+                          });
+                          if (_showEmojiPicker) {
+                            FocusScope.of(context).unfocus();
+                          }
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        height: 44,
+                        width: 44,
+                        decoration: const BoxDecoration(
+                          color: AppColors.coral,
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          onPressed: _sendMessage,
+                        ),
+                      ),
+                    ],
                   ),
+                  if (_showEmojiPicker)
+                    RepaintBoundary(
+                      child: ChatEmojiPicker(
+                        controller: _messageController,
+                        onBackspace: () {
+                          final text = _messageController.text;
+                          final selection = _messageController.selection;
+                          if (text.isEmpty) return;
+                          final start = selection.start >= 0
+                              ? selection.start
+                              : text.length;
+                          final end = selection.end >= 0
+                              ? selection.end
+                              : text.length;
+                          if (start != end) {
+                            _messageController.text = text.replaceRange(
+                              start,
+                              end,
+                              '',
+                            );
+                            _messageController.selection =
+                                TextSelection.collapsed(offset: start);
+                          } else if (start > 0) {
+                            final beforeCursor = text.substring(0, start);
+                            final afterCursor = text.substring(end);
+                            final runes = beforeCursor.runes.toList();
+                            if (runes.isEmpty) return;
+                            runes.removeLast();
+                            final newBefore = String.fromCharCodes(runes);
+                            _messageController.text = newBefore + afterCursor;
+                            _messageController.selection =
+                                TextSelection.collapsed(
+                                  offset: newBefore.length,
+                                );
+                          }
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBubble(MessageModel msg, bool isMe) {
-    return Container(
-      key: ValueKey(msg.id),
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.7,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: isMe ? AppColors.coral : AppColors.creamLight,
-        borderRadius: BorderRadius.circular(20).copyWith(
-          bottomRight: isMe
-              ? const Radius.circular(4)
-              : const Radius.circular(20),
-          bottomLeft: isMe
-              ? const Radius.circular(20)
-              : const Radius.circular(4),
-        ),
-      ),
-      child: Text(
-        msg.content,
-        style: TextStyle(
-          color: isMe ? Colors.white : AppColors.black,
-          fontSize: 15,
-        ),
       ),
     );
   }
@@ -565,6 +946,233 @@ class _ChatScreenState extends State<ChatScreen> {
       ],
     );
   }
+
+  Widget _buildProfileHeader() {
+    if (_otherUserProfile == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.only(top: 24, bottom: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircleAvatar(
+            radius: 50,
+            backgroundImage: _otherUserProfile!.avatarUrl != null
+                ? CachedNetworkImageProvider(_otherUserProfile!.avatarUrl!)
+                : null,
+            backgroundColor: AppColors.creamDark,
+            child: _otherUserProfile!.avatarUrl == null
+                ? Icon(Icons.person, size: 50, color: AppColors.lightGrey)
+                : null,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _otherUserProfile!.displayName ?? 'User',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '@${_otherUserProfile!.username}',
+            style: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: () {
+              context.push('/profile/${_otherUserProfile!.id}');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.creamDark,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            ),
+            child: Text(
+              'View Profile',
+              style: TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMessageActions(MessageModel msg, bool isMe) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.creamBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final canDeleteForEveryone =
+            !msg.deletedForEveryone &&
+            isMe &&
+            _chatRepo.canDeleteForEveryone(msg);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!msg.deletedForEveryone) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: ChatReactionBar(
+                    onReactionSelected: (emoji) {
+                      Navigator.pop(context);
+                      final userId = _currentUserId;
+                      if (userId != null) {
+                        _chatRepo.toggleReaction(msg.id, userId, emoji);
+                      }
+                    },
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Icon(Icons.reply, color: AppColors.black),
+                  title: Text(
+                    'Reply',
+                    style: TextStyle(color: AppColors.black),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      _replyingTo = msg;
+                    });
+                  },
+                ),
+                if (msg.content.isNotEmpty && msg.content != 'Sent an image')
+                  ListTile(
+                    leading: Icon(Icons.copy, color: AppColors.black),
+                    title: Text(
+                      'Copy',
+                      style: TextStyle(color: AppColors.black),
+                    ),
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: msg.content));
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Message copied to clipboard'),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.redAccent,
+                ),
+                title: const Text(
+                  'Delete for me',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteMessageForMe(msg.id);
+                },
+              ),
+              if (canDeleteForEveryone)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_forever_outlined,
+                    color: Colors.redAccent,
+                  ),
+                  title: const Text(
+                    'Delete for everyone',
+                    style: TextStyle(color: Colors.redAccent),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _confirmDeleteForEveryone(msg);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteMessageForMe(String id) async {
+    final userId = _currentUserId;
+    if (userId == null) return;
+
+    try {
+      await _chatRepo.deleteMessageForMe(id, userId);
+      if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m.id == id);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to delete message')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteForEveryone(MessageModel msg) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.creamBg,
+        title: Text(
+          'Delete for everyone?',
+          style: TextStyle(color: AppColors.black),
+        ),
+        content: Text(
+          'This message will be removed for all participants.',
+          style: TextStyle(color: AppColors.darkGrey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: AppColors.darkGrey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final userId = _currentUserId;
+    if (userId == null) return;
+
+    try {
+      await _chatRepo.deleteMessageForEveryone(msg.id, widget.roomId, userId);
+      if (mounted) {
+        setState(() {
+          _optimisticMessages.removeWhere((m) => m.id == msg.id);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to delete message for everyone'),
+          ),
+        );
+      }
+    }
+  }
 }
 
 class PulsingCircle extends StatefulWidget {
@@ -587,9 +1195,10 @@ class _PulsingCircleState extends State<PulsingCircle>
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.3,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -606,10 +1215,7 @@ class _PulsingCircleState extends State<PulsingCircle>
         width: 8,
         height: 8,
         margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: widget.color,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

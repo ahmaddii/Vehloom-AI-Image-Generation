@@ -14,6 +14,7 @@ import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/number_utils.dart';
+import '../../chat/widgets/share_to_chat_bottom_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String? userId;
@@ -255,6 +256,28 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (!_isMe)
+              ListTile(
+                leading: Icon(Icons.send_outlined, color: AppColors.black),
+                title: Text(
+                  'Send Profile in Chat',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) =>
+                        ShareToChatBottomSheet(sharedProfileId: _targetUserId),
+                  );
+                },
+              ),
             ListTile(
               leading: Icon(
                 _isBlocked ? Icons.lock_open : Icons.block,
@@ -271,9 +294,15 @@ class _ProfileScreenState extends State<ProfileScreen>
               onTap: () async {
                 Navigator.pop(context);
                 if (_isBlocked) {
-                  await ProfileRepository().unblockUser(_currentUserId, _targetUserId);
+                  await ProfileRepository().unblockUser(
+                    _currentUserId,
+                    _targetUserId,
+                  );
                 } else {
-                  await ProfileRepository().blockUser(_currentUserId, _targetUserId);
+                  await ProfileRepository().blockUser(
+                    _currentUserId,
+                    _targetUserId,
+                  );
                 }
                 _loadProfileData();
               },
@@ -395,10 +424,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Container(color: AppColors.darkGrey),
                   errorWidget: (context, url, error) => Container(
                     color: AppColors.darkGrey,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: Colors.white24,
-                    ),
+                    child: Icon(Icons.broken_image, color: Colors.white24),
                   ),
                 ),
                 // Gradient for text readability
@@ -449,9 +475,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Scaffold(
         backgroundColor: AppColors.creamBg,
         body: _isLoading
-            ? Center(
-                child: CircularProgressIndicator(color: AppColors.coral),
-              )
+            ? Center(child: CircularProgressIndicator(color: AppColors.coral))
             : _profile == null
             ? Center(
                 child: Text(
@@ -576,17 +600,23 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,
-                                          color: Colors.white
-                                              .withOpacity(0.6),
+                                          color: Colors.white.withOpacity(0.6),
                                         ),
                                       ),
                                       const SizedBox(height: 12),
                                       if (_isBlocked)
                                         Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                            horizontal: 12,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: AppColors.coral.withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(12),
+                                            color: AppColors.coral.withOpacity(
+                                              0.2,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           child: Text(
                                             'User is blocked',
@@ -599,42 +629,42 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         )
                                       else
                                         // Action Buttons
-                                      Row(
-                                        children: [
-                                          if (_isMe)
-                                            Expanded(
-                                              child: _buildActionButton(
-                                                'Edit Profile',
-                                                true,
-                                                () async {
-                                                  await context.push(
-                                                    '/edit-profile',
-                                                  );
-                                                  _loadProfileData();
-                                                },
+                                        Row(
+                                          children: [
+                                            if (_isMe)
+                                              Expanded(
+                                                child: _buildActionButton(
+                                                  'Edit Profile',
+                                                  true,
+                                                  () async {
+                                                    await context.push(
+                                                      '/edit-profile',
+                                                    );
+                                                    _loadProfileData();
+                                                  },
+                                                ),
+                                              )
+                                            else ...[
+                                              Expanded(
+                                                child: _buildActionButton(
+                                                  _isFollowing
+                                                      ? 'Following'
+                                                      : 'Follow',
+                                                  !_isFollowing,
+                                                  _toggleFollow,
+                                                ),
                                               ),
-                                            )
-                                          else ...[
-                                            Expanded(
-                                              child: _buildActionButton(
-                                                _isFollowing
-                                                    ? 'Following'
-                                                    : 'Follow',
-                                                !_isFollowing,
-                                                _toggleFollow,
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: _buildActionButton(
+                                                  'Sign Out',
+                                                  false,
+                                                  _signOut,
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: _buildActionButton(
-                                                'Sign Out',
-                                                false,
-                                                _signOut,
-                                              ),
-                                            ),
+                                            ],
                                           ],
-                                        ],
-                                      ),
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -644,7 +674,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             // Stats Row inside top card
                             if (!_isBlocked)
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
                                 children: [
                                   _buildStatColumn(
                                     NumberUtils.format(_artworks.length),
@@ -806,10 +837,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                       widget.isFollowers
                           ? 'No followers yet.'
                           : 'Not following anyone yet.',
-                      style: TextStyle(
-                        color: AppColors.darkGrey,
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: AppColors.darkGrey, fontSize: 14),
                     ),
                   )
                 : ListView.builder(
@@ -844,10 +872,7 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                             child:
                                 user.avatarUrl == null ||
                                     user.avatarUrl!.isEmpty
-                                ? Icon(
-                                    Icons.person,
-                                    color: AppColors.black,
-                                  )
+                                ? Icon(Icons.person, color: AppColors.black)
                                 : null,
                           ),
                         ),

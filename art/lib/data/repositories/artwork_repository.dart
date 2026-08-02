@@ -97,6 +97,18 @@ class ArtworkRepository {
     return imageUrl;
   }
 
+  Future<void> deleteArtworkImage(String imageUrl) async {
+    try {
+      final uri = Uri.parse(imageUrl);
+      final pathSegments = uri.pathSegments;
+      final bucketIndex = pathSegments.indexOf('artworks');
+      if (bucketIndex != -1 && bucketIndex + 1 < pathSegments.length) {
+        final filePath = pathSegments.sublist(bucketIndex + 1).join('/');
+        await _client.storage.from('artworks').remove([filePath]);
+      }
+    } catch (_) {}
+  }
+
   Future<ArtworkModel> createArtwork({
     required String userId,
     required String title,
@@ -324,6 +336,84 @@ class ArtworkRepository {
           )
           .take(20)
           .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<ArtworkModel>> fetchTopArtOfDay({int limit = 20}) async {
+    try {
+      final currentUserId = AuthRepository().currentUser?.id;
+      List<String> blockedIds = [];
+      if (currentUserId != null) {
+        blockedIds = await ProfileRepository().getBlockedUserIds(currentUserId);
+      }
+
+      // Try RPC first for 24h engagement ranking
+      try {
+        final rpcResponse = await _client.rpc(
+          'get_top_art_of_day',
+          params: {'limit_num': limit + blockedIds.length},
+        );
+
+        if (rpcResponse is List && rpcResponse.isNotEmpty) {
+          final List<ArtworkModel> rpcArtworks = [];
+          for (final item in rpcResponse) {
+            final artworkId = item['id'] as String;
+            final fullArtwork = await getArtwork(artworkId);
+            if (fullArtwork != null &&
+                !blockedIds.contains(fullArtwork.userId)) {
+              rpcArtworks.add(fullArtwork);
+            }
+          }
+          if (rpcArtworks.isNotEmpty) {
+            return rpcArtworks.take(limit).toList();
+          }
+        }
+      } catch (_) {
+        // RPC fallback to standard daily query if RPC is not present or fails
+      }
+
+      // Standard query fallback (artworks created today)
+      final now = DateTime.now().toUtc();
+      final startOfDay = DateTime.utc(
+        now.year,
+        now.month,
+        now.day,
+      ).toIso8601String();
+
+      var query = _client
+          .from('artworks')
+          .select(
+            '*, profiles:user_id(username, display_name, avatar_url), likes:likes(count), comments:comments(count), favorites:favorites(count)',
+          );
+
+      if (blockedIds.isNotEmpty) {
+        query = query.not('user_id', 'in', blockedIds);
+      }
+
+      final response = await query
+          .gte('created_at', startOfDay)
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      var artworks =
+          (response as List).map((json) => ArtworkModel.fromJson(json)).toList()
+            ..sort((a, b) {
+              final aScore = (a.likesCount * 3) + a.commentsCount;
+              final bScore = (b.likesCount * 3) + b.commentsCount;
+              if (aScore == bScore) {
+                return b.createdAt.compareTo(a.createdAt);
+              }
+              return bScore.compareTo(aScore);
+            });
+
+      // Fallback: If no artworks were created today yet, fetch top overall trending
+      if (artworks.isEmpty) {
+        artworks = await fetchTrendingArtworks(limit: limit);
+      }
+
+      return artworks.take(limit).toList();
     } catch (_) {
       return [];
     }

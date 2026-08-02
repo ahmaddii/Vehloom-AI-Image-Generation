@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
@@ -78,6 +79,18 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
       return;
     }
 
+    final lowerPrompt = basePrompt.toLowerCase();
+    final forbiddenRegex = RegExp(
+      r'\b(fuck|shit|bitch|asshole|nude|naked|sex|porn|nsfw|boobs|dick|pussy|vagina|penis)\b',
+    );
+
+    if (forbiddenRegex.hasMatch(lowerPrompt)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("I can't help with it.")));
+      return;
+    }
+
     if (_isGenerating) return;
 
     // Hide keyboard
@@ -110,7 +123,7 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
         'https://image.pollinations.ai/prompt/$encodedPrompt?model=gpt-image-2&width=$_imageWidth&height=$_imageHeight&nologo=true&enhance=$_autoEnhance',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 90));
 
       if (!mounted) return;
 
@@ -120,14 +133,19 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
         });
       } else {
         setState(() {
-          _errorMessage =
-              'Error: ${response.statusCode}\nFailed to generate image.';
+          _errorMessage = 'Failed to generate image. Please try again.';
         });
       }
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Image generation timed out. Please try again.';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'An error occurred: $e';
+        _errorMessage =
+            'Failed to generate image. Please check your network and try again.';
       });
     } finally {
       if (mounted) {
@@ -267,9 +285,11 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to download: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to download image. Please try again.'),
+          ),
+        );
       }
     }
   }
@@ -289,9 +309,11 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
       ], text: 'Check out this AI art I created!');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to share: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to share image. Please try again.'),
+          ),
+        );
       }
     }
   }

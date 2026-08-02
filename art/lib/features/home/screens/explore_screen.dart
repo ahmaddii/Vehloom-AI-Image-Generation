@@ -118,6 +118,8 @@ class _ExploreScreenState extends State<ExploreScreen>
           .get(_buildUri())
           .timeout(const Duration(seconds: 15));
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final items = (data['items'] as List<dynamic>? ?? [])
@@ -159,6 +161,8 @@ class _ExploreScreenState extends State<ExploreScreen>
         });
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _errorMessage = 'Couldn\'t load art. Check your connection and retry.';
         _isLoading = false;

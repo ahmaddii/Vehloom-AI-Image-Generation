@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,7 +10,6 @@ import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
-import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -31,29 +31,50 @@ class _SearchScreenState extends State<SearchScreen> {
   List<ProfileModel> _searchResults = [];
   List<ArtworkModel> _artworkSearchResults = [];
   List<ArtworkModel> _tagSearchResults = [];
-  final Map<String, bool> _followingMap = {};
+
+  final Set<String> _followingSet = {};
   bool _isSearching = false;
+  bool _isSearchLoading = false;
   bool _isLoading = true;
   final String _currentUserId = AuthRepository().currentUser?.id ?? '';
   RealtimeChannel? _searchChannel;
 
+  Timer? _debounceTimer;
+  Timer? _realtimeDebounceTimer;
+  int _latestSearchRequestId = 0;
+
   @override
   void initState() {
     super.initState();
+    _loadFollowingSet();
     _loadCreators();
     _subscribeToSearchUpdates();
-    _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
-    _searchController.removeListener(_onSearchChanged);
+    _debounceTimer?.cancel();
+    _realtimeDebounceTimer?.cancel();
     _searchController.dispose();
     final channel = _searchChannel;
     if (channel != null) {
       Supabase.instance.client.removeChannel(channel);
     }
     super.dispose();
+  }
+
+  Future<void> _loadFollowingSet() async {
+    if (_currentUserId.isEmpty) return;
+    try {
+      final followingList = await ProfileRepository().getFollowing(
+        _currentUserId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _followingSet.clear();
+        _followingSet.addAll(followingList.map((p) => p.id));
+      });
+    } catch (_) {}
   }
 
   void _subscribeToSearchUpdates() {
@@ -63,39 +84,40 @@ class _SearchScreenState extends State<SearchScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'profiles',
-          callback: (_) => _refreshLiveData(),
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'artworks',
-          callback: (_) => _refreshLiveData(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'likes',
-          callback: (_) => _refreshLiveData(),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'comments',
-          callback: (_) => _refreshLiveData(),
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'follows',
-          callback: (_) => _refreshLiveData(),
+          callback: (_) => _onFollowsTableChanged(),
         )
         .subscribe();
+  }
+
+  void _onFollowsTableChanged() {
+    _loadFollowingSet();
+    _scheduleRealtimeRefresh();
+  }
+
+  void _scheduleRealtimeRefresh() {
+    _realtimeDebounceTimer?.cancel();
+    _realtimeDebounceTimer = Timer(const Duration(milliseconds: 1000), () {
+      if (!mounted) return;
+      _refreshLiveData();
+    });
   }
 
   Future<void> _refreshLiveData() async {
     await _loadCreators(showLoading: false);
     if (_searchController.text.trim().isNotEmpty) {
-      await _onSearchChanged();
+      _performSearch(_searchController.text.trim());
     }
   }
 
@@ -107,26 +129,21 @@ class _SearchScreenState extends State<SearchScreen> {
       });
     }
     try {
-      final trendingData = await ProfileRepository().getTrendingCreators();
-      final artworkRepository = ArtworkRepository();
-      final trendingSearches = await artworkRepository.fetchTrendingTags();
-      final trendingArtworks = await artworkRepository.fetchTrendingArtworks();
+      final artworkRepo = ArtworkRepository();
+      final results = await Future.wait([
+        ProfileRepository().getTrendingCreators(),
+        artworkRepo.fetchTrendingTags(),
+        artworkRepo.fetchTrendingArtworks(),
+      ]);
+
+      final trendingData = List<Map<String, dynamic>>.from(results[0] as List);
+      final trendingSearches = List<String>.from(results[1] as List);
+      final trendingArtworks = List<ArtworkModel>.from(results[2] as List);
+
       // Remove self
       trendingData.removeWhere(
         (item) => (item['profile'] as ProfileModel).id == _currentUserId,
       );
-
-      // Load following status for each creator
-      for (final item in trendingData) {
-        final creator = item['profile'] as ProfileModel;
-        if (_currentUserId.isNotEmpty) {
-          final isFollowing = await SocialRepository().isFollowing(
-            _currentUserId,
-            creator.id,
-          );
-          _followingMap[creator.id] = isFollowing;
-        }
-      }
 
       if (mounted) {
         setState(() {
@@ -139,6 +156,7 @@ class _SearchScreenState extends State<SearchScreen> {
         });
       }
     } catch (_) {}
+
     if (mounted && showLoading) {
       setState(() {
         _isLoading = false;
@@ -146,76 +164,79 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  Future<void> _onSearchChanged() async {
-    final query = _searchController.text.trim();
+  void _onSearchInputChanged(String text) {
+    _debounceTimer?.cancel();
+    final query = text.trim();
     if (query.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _isSearching = false;
-          _searchResults = [];
-          _artworkSearchResults = [];
-          _tagSearchResults = [];
-        });
-      }
+      _latestSearchRequestId++;
+      setState(() {
+        _isSearching = false;
+        _isSearchLoading = false;
+        _searchResults = [];
+        _artworkSearchResults = [];
+        _tagSearchResults = [];
+      });
       return;
     }
+
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _performSearch(query);
+      }
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
+    if (query.isEmpty) return;
+
+    final requestId = ++_latestSearchRequestId;
 
     if (mounted) {
       setState(() {
         _isSearching = true;
+        _isSearchLoading = true;
       });
     }
 
-    List<ProfileModel> creatorResults = [];
     try {
-      creatorResults = await ProfileRepository().searchProfiles(query);
+      final results = await Future.wait([
+        ProfileRepository().searchProfiles(query),
+        ArtworkRepository().searchArtworks(query),
+        ArtworkRepository().searchArtworksByTag(query),
+      ]);
+
+      if (requestId != _latestSearchRequestId || !mounted) return;
+
+      final creatorResults = List<ProfileModel>.from(results[0] as List);
       creatorResults.removeWhere((c) => c.id == _currentUserId);
-    } catch (e) {
-      print('searchProfiles error: $e');
-    }
 
-    List<ArtworkModel> artworkResults = [];
-    try {
-      artworkResults = await ArtworkRepository().searchArtworks(query);
-    } catch (e) {
-      print('searchArtworks error: $e');
-    }
+      final artworkResults = List<ArtworkModel>.from(results[1] as List);
+      final tagResults = List<ArtworkModel>.from(results[2] as List);
 
-    List<ArtworkModel> tagResults = [];
-    try {
-      tagResults = await ArtworkRepository().searchArtworksByTag(query);
-    } catch (e) {
-      print('searchArtworksByTag error: $e');
-    }
-
-    // Load following status for creators
-    for (final creator in creatorResults) {
-      if (_currentUserId.isNotEmpty && !_followingMap.containsKey(creator.id)) {
-        try {
-          final isFollowing = await SocialRepository().isFollowing(
-            _currentUserId,
-            creator.id,
-          );
-          _followingMap[creator.id] = isFollowing;
-        } catch (_) {}
-      }
-    }
-
-    if (mounted) {
       setState(() {
         _searchResults = creatorResults;
         _artworkSearchResults = artworkResults;
         _tagSearchResults = tagResults;
+        _isSearchLoading = false;
+      });
+    } catch (e) {
+      if (requestId != _latestSearchRequestId || !mounted) return;
+      setState(() {
+        _isSearchLoading = false;
       });
     }
   }
 
   Future<void> _toggleFollow(String targetUserId) async {
     if (_currentUserId.isEmpty) return;
-    final isFollowing = _followingMap[targetUserId] ?? false;
+    final isFollowing = _followingSet.contains(targetUserId);
 
     setState(() {
-      _followingMap[targetUserId] = !isFollowing;
+      if (isFollowing) {
+        _followingSet.remove(targetUserId);
+      } else {
+        _followingSet.add(targetUserId);
+      }
     });
 
     try {
@@ -228,7 +249,11 @@ class _SearchScreenState extends State<SearchScreen> {
       // Revert state on error
       if (mounted) {
         setState(() {
-          _followingMap[targetUserId] = isFollowing;
+          if (isFollowing) {
+            _followingSet.add(targetUserId);
+          } else {
+            _followingSet.remove(targetUserId);
+          }
         });
       }
     }
@@ -241,7 +266,7 @@ class _SearchScreenState extends State<SearchScreen> {
       itemCount: profiles.length,
       itemBuilder: (context, index) {
         final creator = profiles[index];
-        final isFollowing = _followingMap[creator.id] ?? false;
+        final isFollowing = _followingSet.contains(creator.id);
 
         // Try to find trending metrics
         final trendingItem = _trendingCreatorsData.firstWhere(
@@ -267,11 +292,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ? CachedNetworkImageProvider(creator.avatarUrl!)
                       : null,
                   child: creator.avatarUrl == null || creator.avatarUrl!.isEmpty
-                      ? Icon(
-                          Icons.person,
-                          color: AppColors.black,
-                          size: 24,
-                        )
+                      ? Icon(Icons.person, color: AppColors.black, size: 24)
                       : null,
                 ),
                 const SizedBox(width: 16),
@@ -480,7 +501,9 @@ class _SearchScreenState extends State<SearchScreen> {
       children: _trendingSearches.map((tag) {
         return GestureDetector(
           onTap: () {
-            _searchController.text = tag.replaceAll('#', '');
+            final query = tag.replaceAll('#', '');
+            _searchController.text = query;
+            _onSearchInputChanged(query);
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -566,6 +589,15 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchResultsView() {
+    if (_isSearchLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(color: AppColors.coral),
+        ),
+      );
+    }
+
     switch (_selectedCategoryIndex) {
       case 0: // All
         return Column(
@@ -661,7 +693,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     GestureDetector(
                       onTap: () => context.pop(),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.lightGrey,
                           borderRadius: BorderRadius.circular(20),
@@ -699,13 +734,16 @@ class _SearchScreenState extends State<SearchScreen> {
                     Expanded(
                       child: TextField(
                         controller: _searchController,
+                        onChanged: _onSearchInputChanged,
                         decoration: InputDecoration(
                           hintText: 'Search artists, artworks, or tags',
                           hintStyle: TextStyle(color: AppColors.darkGrey),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
                           filled: false,
                         ),
                       ),
@@ -719,6 +757,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                         onPressed: () {
                           _searchController.clear();
+                          _onSearchInputChanged('');
                         },
                       ),
                   ],

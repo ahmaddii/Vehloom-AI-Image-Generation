@@ -5,6 +5,7 @@ import 'core/services/preferences_service.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data/repositories/profile_repository.dart';
+import 'core/widgets/offline_wrapper.dart';
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -59,6 +60,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               : ThemeMode.light,
           routerConfig: appRouter,
           debugShowCheckedModeBanner: false,
+          builder: (context, child) {
+            return OfflineWrapper(child: child!);
+          },
         );
       },
     );

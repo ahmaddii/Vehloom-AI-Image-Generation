@@ -1,8 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/preferences_service.dart';
 import '../../../data/models/chat_room_model.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/repositories/chat_repository.dart';
@@ -125,7 +125,8 @@ class _InboxScreenState extends State<InboxScreen> {
       children: [
         CircleAvatar(
           radius: 30,
-          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+          backgroundImage:
+              avatarUrl != null ? CachedNetworkImageProvider(avatarUrl) : null,
           backgroundColor: AppColors.creamDark,
           child: avatarUrl == null
               ? Icon(Icons.person, color: AppColors.lightGrey, size: 28)
@@ -259,7 +260,8 @@ class _InboxScreenState extends State<InboxScreen> {
     return FutureBuilder<List<ProfileModel>>(
       future: _followingFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const SizedBox.shrink();
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -279,7 +281,7 @@ class _InboxScreenState extends State<InboxScreen> {
               showAddButton: false,
             ),
             if (activeNow.isNotEmpty)
-              _horizontalPeopleList(title: 'Active Chat', profiles: activeNow),
+              _horizontalPeopleList(title: 'Active Now', profiles: activeNow),
             Divider(height: 1, thickness: 1, color: AppColors.creamLight),
           ],
         );
@@ -312,7 +314,8 @@ class _InboxScreenState extends State<InboxScreen> {
           ),
           leading: CircleAvatar(
             radius: 24,
-            backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+            backgroundImage:
+                avatarUrl != null ? CachedNetworkImageProvider(avatarUrl) : null,
             backgroundColor: AppColors.creamDark,
             child: avatarUrl == null
                 ? Icon(Icons.person, color: AppColors.lightGrey)
@@ -362,20 +365,38 @@ class _InboxScreenState extends State<InboxScreen> {
                     ),
                   ],
                 ),
-          // NOTE: the screenshot shows a numeric unread badge (e.g. "2",
-          // "3"). That requires an actual unread-message *count* per room,
-          // which the current PreferencesService/ChatRoomModel don't track
-          // (only a boolean "has unread"). Shown here as a coral dot to
-          // match the theme; swap in a real count once that data exists,
-          // e.g. `room.unreadCount` from the repo.
+          // Use a StreamBuilder to get real-time unread counts from messages table
           trailing: isUnread
-              ? Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: AppColors.coral,
-                    shape: BoxShape.circle,
-                  ),
+              ? StreamBuilder<int>(
+                  stream: _chatRepo.getUnreadCount(room.id, _currentUserId!),
+                  builder: (context, countSnapshot) {
+                    final unreadCount = countSnapshot.data ?? 0;
+                    if (unreadCount == 0) {
+                      return Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: AppColors.coral,
+                          shape: BoxShape.circle,
+                        ),
+                      );
+                    }
+                    return Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: AppColors.coral,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  },
                 )
               : null,
           onTap: () => _openChat(room.id, otherUserId),
@@ -416,7 +437,8 @@ class _InboxScreenState extends State<InboxScreen> {
         child: StreamBuilder<List<ChatRoomModel>>(
           stream: _chatRepo.getInbox(_currentUserId),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const SizedBox.shrink();
             }
 

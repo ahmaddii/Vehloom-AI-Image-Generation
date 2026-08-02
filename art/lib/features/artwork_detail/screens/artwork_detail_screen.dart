@@ -15,6 +15,7 @@ import '../../../data/models/comment_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../core/utils/number_utils.dart';
+import '../../chat/widgets/share_to_chat_bottom_sheet.dart';
 import 'edit_artwork_screen.dart';
 
 class ArtworkDetailScreen extends StatefulWidget {
@@ -939,6 +940,27 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
               onTap: () {
                 Navigator.pop(sheetContext);
                 _shareArtwork();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.send_outlined, color: AppColors.black),
+              title: Text(
+                'Send in Chat',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => ShareToChatBottomSheet(
+                    sharedArtworkId: widget.artworkId,
+                  ),
+                );
               },
             ),
             ListTile(

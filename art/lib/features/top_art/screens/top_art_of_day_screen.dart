@@ -20,26 +20,54 @@ class TopArtOfDayScreen extends StatefulWidget {
 }
 
 class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
-  late Timer _timer;
-  Duration _timeLeft = const Duration(hours: 14, minutes: 22, seconds: 8);
+  Timer? _countdownTimer;
+  Timer? _realtimeDebounceTimer;
+  Timer? _confettiTimer;
+  Duration _timeLeft = Duration.zero;
   List<ArtworkModel> _topArtworks = [];
   bool _isLoading = true;
   bool _isTopOnePortrait = false;
   bool _showConfetti = true;
   RealtimeChannel? _topArtChannel;
 
+  int _latestRequestId = 0;
+  ImageStreamListener? _imageStreamListener;
+  ImageStream? _imageStream;
+
   @override
   void initState() {
     super.initState();
-    _startTimer();
+    _calculateAndStartCountdown();
     _loadTopArtworks();
     _subscribeToTopArtUpdates();
 
-    Future.delayed(const Duration(seconds: 4), () {
+    _confettiTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) {
         setState(() {
           _showConfetti = false;
         });
+      }
+    });
+  }
+
+  void _calculateAndStartCountdown() {
+    final now = DateTime.now().toUtc();
+    final nextResetUtc = DateTime.utc(now.year, now.month, now.day + 1);
+    _timeLeft = nextResetUtc.difference(now);
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final currentNow = DateTime.now().toUtc();
+      final remaining = nextResetUtc.difference(currentNow);
+      if (remaining.inSeconds > 0) {
+        if (mounted) {
+          setState(() {
+            _timeLeft = remaining;
+          });
+        }
+      } else {
+        _countdownTimer?.cancel();
+        _calculateAndStartCountdown();
       }
     });
   }
@@ -51,39 +79,36 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'artworks',
-          callback: (_) => _loadTopArtworks(showLoading: false),
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'likes',
-          callback: (_) => _loadTopArtworks(showLoading: false),
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'comments',
-          callback: (_) => _loadTopArtworks(showLoading: false),
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .subscribe();
   }
 
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeLeft.inSeconds > 0) {
-        if (mounted) {
-          setState(() {
-            _timeLeft = _timeLeft - const Duration(seconds: 1);
-          });
-        }
-      } else {
-        _timer.cancel();
+  void _scheduleRealtimeRefresh() {
+    _realtimeDebounceTimer?.cancel();
+    _realtimeDebounceTimer = Timer(const Duration(milliseconds: 1000), () {
+      if (mounted) {
+        _loadTopArtworks(showLoading: false);
       }
     });
   }
 
   Future<void> _loadTopArtworks({bool showLoading = true}) async {
     if (!mounted) return;
+    final requestId = ++_latestRequestId;
+
     if (showLoading) {
       setState(() {
         _isLoading = true;
@@ -91,33 +116,34 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
     }
 
     try {
-      final artworks = await ArtworkRepository().fetchLatestArtworks();
-      // Sort by likesCount descending
-      artworks.sort((a, b) => b.likesCount.compareTo(a.likesCount));
+      final artworks = await ArtworkRepository().fetchTopArtOfDay();
 
-      if (mounted) {
-        setState(() {
-          _topArtworks = artworks;
-        });
+      if (requestId != _latestRequestId || !mounted) return;
 
-        if (artworks.isNotEmpty) {
-          final topOne = artworks.first;
-          final imageProvider = CachedNetworkImageProvider(topOne.imageUrl);
-          final stream = imageProvider.resolve(const ImageConfiguration());
-          stream.addListener(
-            ImageStreamListener((ImageInfo info, bool _) {
-              if (mounted) {
-                setState(() {
-                  _isTopOnePortrait = info.image.height > info.image.width;
-                });
-              }
-            }),
-          );
+      setState(() {
+        _topArtworks = artworks;
+      });
+
+      if (artworks.isNotEmpty) {
+        final topOne = artworks.first;
+        final imageProvider = CachedNetworkImageProvider(topOne.imageUrl);
+
+        if (_imageStream != null && _imageStreamListener != null) {
+          _imageStream!.removeListener(_imageStreamListener!);
         }
+
+        _imageStream = imageProvider.resolve(const ImageConfiguration());
+        _imageStreamListener = ImageStreamListener((ImageInfo info, bool _) {
+          if (requestId != _latestRequestId || !mounted) return;
+          setState(() {
+            _isTopOnePortrait = info.image.height > info.image.width;
+          });
+        });
+        _imageStream!.addListener(_imageStreamListener!);
       }
     } catch (_) {}
 
-    if (mounted && showLoading) {
+    if (mounted && showLoading && requestId == _latestRequestId) {
       setState(() {
         _isLoading = false;
       });
@@ -126,7 +152,12 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
 
   @override
   void dispose() {
-    _timer.cancel();
+    _countdownTimer?.cancel();
+    _realtimeDebounceTimer?.cancel();
+    _confettiTimer?.cancel();
+    if (_imageStream != null && _imageStreamListener != null) {
+      _imageStream!.removeListener(_imageStreamListener!);
+    }
     final channel = _topArtChannel;
     if (channel != null) {
       Supabase.instance.client.removeChannel(channel);
@@ -290,26 +321,11 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Scaffold(
-      backgroundColor: AppColors.creamBg,
-      appBar: AppBar(
-        title: Text(
-          'Top Art of the Day',
-          style: TextStyle(
-            color: AppColors.black,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: AppColors.creamBg,
-        elevation: 0,
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Text(
-          'No rankings available yet today.\nCheck back later!',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, color: AppColors.darkGrey),
-        ),
+    return Center(
+      child: Text(
+        'No rankings available yet today.\nCheck back later!',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 16, color: AppColors.darkGrey),
       ),
     );
   }
@@ -369,29 +385,34 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
   Widget _buildTopArtCard(ArtworkModel topOne) {
     final isLandscape = !_isTopOnePortrait;
 
-    return GestureDetector(
-      onTap: () async {
-        await context.push('/artwork/${topOne.id}');
-        if (mounted) {
-          _loadTopArtworks(showLoading: false);
-        }
-      },
-      child: Container(
-        height: isLandscape ? null : 220,
-        decoration: BoxDecoration(
-          color: AppColors.creamLight,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: () async {
+          await context.push('/artwork/${topOne.id}');
+          if (mounted) {
+            _loadTopArtworks(showLoading: false);
+          }
+        },
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          height: isLandscape ? null : 220,
+          decoration: BoxDecoration(
+            color: AppColors.creamLight,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: isLandscape
+              ? _buildLandscapeLayout(topOne)
+              : _buildPortraitLayout(topOne),
         ),
-        child: isLandscape
-            ? _buildLandscapeLayout(topOne)
-            : _buildPortraitLayout(topOne),
       ),
     );
   }
@@ -619,188 +640,194 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
-        onTap: () async {
-          await context.push('/artwork/${artwork.id}');
-          if (mounted) {
-            _loadTopArtworks(showLoading: false);
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.creamLight,
-            borderRadius: BorderRadius.circular(20),
-            border: isTrending
-                ? Border.all(
-                    color: AppColors.coral.withOpacity(0.6),
-                    width: 1.5,
-                  )
-                : null,
-            boxShadow: [
-              BoxShadow(
-                color: isTrending
-                    ? AppColors.coral.withOpacity(0.05)
-                    : AppColors.black.withOpacity(0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // Rank
-              SizedBox(
-                width: 40,
-                child: Text(
-                  '#$rank',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.black.withOpacity(
-                      0.2,
-                    ), // Light grey matching screenshot
-                  ),
-                  textAlign: TextAlign.center,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () async {
+            await context.push('/artwork/${artwork.id}');
+            if (mounted) {
+              _loadTopArtworks(showLoading: false);
+            }
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.creamLight,
+              borderRadius: BorderRadius.circular(20),
+              border: isTrending
+                  ? Border.all(
+                      color: AppColors.coral.withOpacity(0.6),
+                      width: 1.5,
+                    )
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: isTrending
+                      ? AppColors.coral.withOpacity(0.05)
+                      : AppColors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Thumbnail
-              Hero(
-                tag: 'top_art_${artwork.id}',
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    image: DecorationImage(
-                      image: CachedNetworkImageProvider(artwork.imageUrl),
-                      fit: BoxFit.cover,
+              ],
+            ),
+            child: Row(
+              children: [
+                // Rank
+                SizedBox(
+                  width: 40,
+                  child: Text(
+                    '#$rank',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.black.withOpacity(
+                        0.2,
+                      ), // Light grey matching screenshot
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      artwork.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.black,
+                const SizedBox(width: 8),
+                // Thumbnail
+                Hero(
+                  tag: 'top_art_${artwork.id}',
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      image: DecorationImage(
+                        image: CachedNetworkImageProvider(artwork.imageUrl),
+                        fit: BoxFit.cover,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      artwork.authorUsername != null
-                          ? '@${artwork.authorUsername}'
-                          : 'user',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.black.withOpacity(0.6),
-                        fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        artwork.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.black,
+                        ),
                       ),
-                    ),
-                    if (isTrending) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
+                      const SizedBox(height: 4),
+                      Text(
+                        artwork.authorUsername != null
+                            ? '@${artwork.authorUsername}'
+                            : 'user',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.black.withOpacity(0.6),
+                          fontWeight: FontWeight.w500,
                         ),
-                        decoration: BoxDecoration(
-                          color: AppColors.coral.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const Text(
-                              'Trending',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.coral,
-                                height: 1.2,
-                              ),
-                            ),
-                            const SizedBox(width: 3),
-                            Transform.translate(
-                              offset: const Offset(
-                                0,
-                                -2.5,
-                              ), // Decrease the Y value to move it further UP
-                              child: Transform.scale(
-                                scale: 1.5,
-                                child: Lottie.asset(
-                                  'assets/lottie/fire.json',
-                                  width: 10,
-                                  height: 10,
-                                  repeat: true,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const SizedBox(),
+                      ),
+                      if (isTrending) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.coral.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Trending',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.coral,
+                                  height: 1.2,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 3),
+                              Transform.translate(
+                                offset: const Offset(
+                                  0,
+                                  -2.5,
+                                ), // Decrease the Y value to move it further UP
+                                child: Transform.scale(
+                                  scale: 1.5,
+                                  child: Lottie.asset(
+                                    'assets/lottie/fire.json',
+                                    width: 10,
+                                    height: 10,
+                                    repeat: true,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            const SizedBox(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Likes
-              isTrending
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.favorite,
-                          color: AppColors.coral,
-                          size: 16,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${artwork.likesCount}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                const SizedBox(width: 8),
+                // Likes
+                isTrending
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.favorite,
                             color: AppColors.coral,
+                            size: 16,
                           ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.favorite_border,
-                          color: AppColors.darkGrey,
-                          size: 16,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${artwork.likesCount}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 2),
+                          Text(
+                            '${artwork.likesCount}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.coral,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.favorite_border,
                             color: AppColors.darkGrey,
+                            size: 16,
                           ),
-                        ),
-                      ],
-                    ),
-              const SizedBox(width: 4),
-            ],
+                          const SizedBox(height: 2),
+                          Text(
+                            '${artwork.likesCount}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.darkGrey,
+                            ),
+                          ),
+                        ],
+                      ),
+                const SizedBox(width: 4),
+              ],
+            ),
           ),
         ),
       ),

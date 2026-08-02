@@ -19,7 +19,6 @@ import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
-import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../data/models/story_model.dart';
@@ -30,12 +29,9 @@ import 'dart:io';
 import 'package:gal/gal.dart';
 import 'explore_screen.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import '../../../core/utils/number_utils.dart';
 import 'package:lottie/lottie.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
-import 'package:gal/gal.dart';
+import '../../chat/widgets/share_to_chat_bottom_sheet.dart';
 
 // Global RouteObserver instance – register this in MaterialApp/GoRouter
 final RouteObserver<ModalRoute<void>> homeRouteObserver =
@@ -58,8 +54,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   ];
   int _selectedCategoryIndex = 0;
 
-  ProfileModel? _myProfile;
+  int _unreadNotifications = 0;
+  int _unreadMessages = 0;
   List<ProfileModel> _creators = [];
+  ProfileModel? _myProfile;
   List<StoryModel> _activeStories = [];
   List<ArtworkModel> _masonryArtworks = [];
   bool _isLoading = true;
@@ -95,7 +93,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final route = ModalRoute.of(this.context);
+    final route = ModalRoute.of(context);
     if (route != null) {
       homeRouteObserver.subscribe(this, route);
     }
@@ -1216,13 +1214,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
           context.push('/ai-art');
         },
         backgroundColor: AppColors.coral,
+        tooltip: 'Generate AI Art',
         child: Lottie.asset(
           'assets/lottie/AI Assistant.json',
           width: 48,
           height: 48,
           fit: BoxFit.contain,
         ),
-        tooltip: 'Generate AI Art',
       ),
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
     );
@@ -1303,6 +1301,31 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                   if (context.mounted) {
                     context.push('/chat/${room.id}?otherUserId=${creator.id}');
                   }
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: Icon(
+                  Icons.send_outlined,
+                  color: AppColors.black,
+                ),
+                title: Text(
+                  'Send Creator in Chat',
+                  style: TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) => ShareToChatBottomSheet(
+                      sharedProfileId: creator.id,
+                    ),
+                  );
                 },
               ),
             ],
