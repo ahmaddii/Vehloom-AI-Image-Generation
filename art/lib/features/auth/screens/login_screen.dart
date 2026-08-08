@@ -12,12 +12,49 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _obscurePassword = true;
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isGoogleLoading) return;
+    setState(() => _isGoogleLoading = true);
+    try {
+      final success = await AuthRepository().signInWithGoogle();
+      if (!success && mounted) {
+        setState(() => _isGoogleLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google Sign-In was cancelled or failed.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isGoogleLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google Sign-In error: ${e.toString()}'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isGoogleLoading) {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted && AuthRepository().currentSession == null) {
+          setState(() => _isGoogleLoading = false);
+        }
+      });
+    }
+  }
 
   late final AnimationController _entranceController;
   late final Animation<double> _fadeAnimation;
@@ -26,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 650),
@@ -46,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _emailController.dispose();
     _passwordController.dispose();
     _entranceController.dispose();
@@ -321,7 +360,8 @@ class _LoginScreenState extends State<LoginScreen>
                         label: 'Continue with Google',
                         textColor: textColor,
                         surfaceColor: surfaceColor,
-                        onTap: () {},
+                        isLoading: _isGoogleLoading,
+                        onTap: _handleGoogleSignIn,
                       ),
 
                       const SizedBox(height: 12),
@@ -440,29 +480,47 @@ class _LoginScreenState extends State<LoginScreen>
     required Color textColor,
     required Color surfaceColor,
     required VoidCallback onTap,
+    bool isLoading = false,
   }) {
     return OutlinedButton(
-      onPressed: onTap,
+      onPressed: isLoading ? null : onTap,
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
         side: BorderSide(color: textColor.withOpacity(0.1)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: surfaceColor,
+        disabledBackgroundColor: surfaceColor,
+        foregroundColor: textColor,
+        disabledForegroundColor: textColor,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          leading,
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-        ],
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: isLoading
+            ? SizedBox(
+                key: const ValueKey('social_login_loading'),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: textColor,
+                ),
+              )
+            : Row(
+                key: const ValueKey('social_login_content'),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  leading,
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

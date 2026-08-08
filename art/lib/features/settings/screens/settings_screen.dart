@@ -348,24 +348,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               size: 20,
             ),
             const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: isRed ? Colors.red : AppColors.black,
-                ),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: isRed ? Colors.red : AppColors.black,
               ),
             ),
+            const Spacer(),
             if (trailingWidget != null)
               trailingWidget
             else if (trailingText != null)
-              Text(
-                trailingText,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.black.withOpacity(0.4),
+              Expanded(
+                child: Text(
+                  trailingText,
+                  textAlign: TextAlign.end,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.black.withOpacity(0.4),
+                  ),
                 ),
               )
             else

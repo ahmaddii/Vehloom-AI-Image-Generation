@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,18 +57,34 @@ final GoRouter appRouter = GoRouter(
   redirect: (context, state) {
     final isLoggedIn = Supabase.instance.client.auth.currentSession != null;
     final location = state.uri.path;
+    final hasOAuthCode =
+        state.uri.queryParameters.containsKey('code') ||
+        state.uri.fragment.contains('access_token') ||
+        state.uri.queryParameters.containsKey('error');
     final isAuthRoute =
         location == '/login' ||
         location == '/signup' ||
-        location == '/forgot-password';
+        location == '/forgot-password' ||
+        location == '/auth-options' ||
+        location.contains('login-callback');
     final isOnboardingRoute = location.startsWith('/onboarding');
 
-    if (isLoggedIn && (isAuthRoute || isOnboardingRoute)) {
-      if (location == '/splash') return null; // Let splash play
-      return '/';
+    // 1. If user is logged in, redirect away from auth and onboarding routes directly to Home feed '/'
+    if (isLoggedIn) {
+      if (isAuthRoute || isOnboardingRoute) {
+        if (location == '/splash') return null; // Let splash play
+        return '/';
+      }
+      return null;
     }
 
-    // If not logged in, but trying to go home directly without splash
+    // 2. If OAuth code/token is present in the URI, Supabase is exchanging tokens.
+    // DO NOT redirect to onboarding while OAuth exchange is in progress!
+    if (hasOAuthCode || location.contains('login-callback')) {
+      return null;
+    }
+
+    // 3. If not logged in, and trying to access home directly without splash (and not during OAuth)
     if (!isLoggedIn && location == '/') {
       return '/onboarding1';
     }
@@ -209,18 +224,12 @@ final GoRouter appRouter = GoRouter(
         final userId = state.pathParameters['userId'] ?? '';
         final extra = state.extra as Map<String, dynamic>;
         final stories = extra['stories'] as List<StoryModel>;
-        return StoryViewerScreen(
-          stories: stories,
-          initialUserId: userId,
-        );
+        return StoryViewerScreen(stories: stories, initialUserId: userId);
       },
     ),
 
     // Chat
-    GoRoute(
-      path: '/inbox',
-      builder: (context, state) => const InboxScreen(),
-    ),
+    GoRoute(path: '/inbox', builder: (context, state) => const InboxScreen()),
     GoRoute(
       path: '/chat/:roomId',
       builder: (context, state) {

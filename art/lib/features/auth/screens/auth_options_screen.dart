@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/preferences_service.dart';
+import '../../../data/repositories/auth_repository.dart';
 
 class AuthOptionsScreen extends StatefulWidget {
   const AuthOptionsScreen({super.key});
@@ -13,7 +14,9 @@ class AuthOptionsScreen extends StatefulWidget {
 }
 
 class _AuthOptionsScreenState extends State<AuthOptionsScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  bool _isGoogleLoading = false;
+
   final List<String> _nftImages = [
     'assets/auth_options/auth1.png',
     'assets/auth_options/auth2.png',
@@ -22,6 +25,42 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
     'assets/onboarding3/4.jpg',
     'assets/onboarding3/6.jpg',
   ];
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isGoogleLoading) return;
+    setState(() => _isGoogleLoading = true);
+    try {
+      final success = await AuthRepository().signInWithGoogle();
+      if (!success && mounted) {
+        setState(() => _isGoogleLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google Sign-In was cancelled or failed.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isGoogleLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google Sign-In error: ${e.toString()}'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isGoogleLoading) {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted && AuthRepository().currentSession == null) {
+          setState(() => _isGoogleLoading = false);
+        }
+      });
+    }
+  }
 
   late ScrollController _scrollController;
   late Ticker _ticker;
@@ -41,6 +80,7 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController = ScrollController();
     _ticker = createTicker((elapsed) {
       if (_scrollController.hasClients) {
@@ -114,6 +154,7 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     _scrollController.dispose();
     _entranceController.dispose();
@@ -265,7 +306,7 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
 
                         const SizedBox(height: 20),
 
-                        // Staggered Email Button Animation
+                        // Staggered Primary Button Animation (Google)
                         FadeTransition(
                           opacity: _emailButtonAnimation,
                           child: Transform.translate(
@@ -277,9 +318,17 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
                               height: 56,
                               backgroundColor: primaryColor,
                               foregroundColor: Colors.black,
-                              icon: Icons.mail_outline_rounded,
-                              label: 'Continue with Email',
-                              onPressed: () => context.push('/signup'),
+                              isLoading: _isGoogleLoading,
+                              leading: const Text(
+                                'G',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              label: 'Continue with Google',
+                              onPressed: _handleGoogleSignIn,
                               shadowColor: primaryColor,
                             ),
                           ),
@@ -287,7 +336,7 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
 
                         const SizedBox(height: 14),
 
-                        // Staggered Social Buttons Animation
+                        // Staggered Secondary Buttons Animation
                         FadeTransition(
                           opacity: _socialButtonsAnimation,
                           child: Transform.translate(
@@ -297,17 +346,14 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
                             ),
                             child: Column(
                               children: [
-                                // Google Button
+                                // Facebook Button
                                 _socialButton(
-                                  leading: Text(
-                                    'G',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                      color: textColor.withOpacity(0.85),
-                                    ),
+                                  leading: Icon(
+                                    Icons.facebook,
+                                    size: 22,
+                                    color: textColor.withOpacity(0.85),
                                   ),
-                                  label: 'Continue with Google',
+                                  label: 'Continue with Facebook',
                                   textColor: textColor,
                                   surfaceColor: surfaceColor,
                                   onTap: () {},
@@ -315,17 +361,17 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
 
                                 const SizedBox(height: 12),
 
-                                // Apple Button
+                                // Email Button
                                 _socialButton(
                                   leading: Icon(
-                                    Icons.apple,
+                                    Icons.mail_outline_rounded,
                                     size: 22,
                                     color: textColor.withOpacity(0.85),
                                   ),
-                                  label: 'Continue with Apple',
+                                  label: 'Continue with Email',
                                   textColor: textColor,
                                   surfaceColor: surfaceColor,
-                                  onTap: () {},
+                                  onTap: () => context.push('/signup'),
                                 ),
                               ],
                             ),
@@ -385,18 +431,22 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
     required double height,
     required Color backgroundColor,
     required Color foregroundColor,
-    required IconData icon,
+    IconData? icon,
+    Widget? leading,
     required String label,
     required VoidCallback onPressed,
     required Color shadowColor,
+    bool isLoading = false,
   }) {
     return SizedBox(
       height: height,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
+          disabledBackgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
+          disabledForegroundColor: foregroundColor,
           elevation: 0,
           shadowColor: shadowColor.withOpacity(0.4),
           side: BorderSide(color: Colors.white.withOpacity(0.4), width: 1.2),
@@ -404,20 +454,37 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
             borderRadius: BorderRadius.circular(18),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 22, color: foregroundColor),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 15.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ],
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: isLoading
+              ? SizedBox(
+                  key: const ValueKey('loading'),
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: foregroundColor,
+                  ),
+                )
+              : Row(
+                  key: const ValueKey('content'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (leading != null)
+                      leading
+                    else if (icon != null)
+                      Icon(icon, size: 22, color: foregroundColor),
+                    const SizedBox(width: 12),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -429,11 +496,12 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
     required Color textColor,
     required Color surfaceColor,
     required VoidCallback onTap,
+    bool isLoading = false,
   }) {
     return SizedBox(
       height: 56,
       child: OutlinedButton(
-        onPressed: onTap,
+        onPressed: isLoading ? null : onTap,
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           side: BorderSide(color: textColor.withOpacity(0.2), width: 1.2),
@@ -441,22 +509,39 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
             borderRadius: BorderRadius.circular(18),
           ),
           backgroundColor: surfaceColor.withOpacity(0.7),
+          disabledBackgroundColor: surfaceColor.withOpacity(0.7),
+          foregroundColor: textColor,
+          disabledForegroundColor: textColor,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            leading,
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                color: textColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: isLoading
+              ? SizedBox(
+                  key: const ValueKey('social_loading'),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: textColor,
+                  ),
+                )
+              : Row(
+                  key: const ValueKey('social_content'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    leading,
+                    const SizedBox(width: 12),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: textColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

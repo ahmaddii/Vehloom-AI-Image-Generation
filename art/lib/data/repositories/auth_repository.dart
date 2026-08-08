@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthRepository {
@@ -8,6 +9,57 @@ class AuthRepository {
   Session? get currentSession => _client.auth.currentSession;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
+
+  Future<bool> signInWithGoogle() async {
+    final redirectTo = kIsWeb ? null : 'com.example.art://login-callback';
+    return await _client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: redirectTo,
+    );
+  }
+
+  Future<void> ensureProfileExists() async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final existing = await _client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (existing == null) {
+        final metadata = user.userMetadata ?? {};
+        final email = user.email ?? '';
+        final rawName = metadata['full_name'] ??
+            metadata['name'] ??
+            metadata['preferred_username'] ??
+            (email.isNotEmpty ? email.split('@').first : 'user');
+
+        final cleanUsername = rawName
+            .toString()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+
+        final username = cleanUsername.isEmpty
+            ? 'user_${user.id.substring(0, 6)}'
+            : cleanUsername;
+
+        final avatarUrl = metadata['avatar_url'] ?? metadata['picture'];
+
+        await _client.from('profiles').upsert({
+          'id': user.id,
+          'username': username,
+          'display_name': metadata['full_name'] ?? metadata['name'] ?? username,
+          'avatar_url': avatarUrl,
+          'bio': '',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error ensuring profile exists: $e');
+    }
+  }
 
   Future<AuthResponse> signUp({
     required String email,

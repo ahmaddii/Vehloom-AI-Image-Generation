@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'core/services/preferences_service.dart';
 import 'core/services/notification_service.dart';
+import 'data/repositories/auth_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,14 @@ Future<void> main() async {
     url: dotenv.env['SUPABASE_URL']!,
     publishableKey: dotenv.env['SUPABASE_PUBLISHABLE_KEY']!,
   );
+
+  // Automatically ensure profile exists on successful OAuth or Password login
+  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.signedIn ||
+        data.event == AuthChangeEvent.tokenRefreshed) {
+      AuthRepository().ensureProfileExists();
+    }
+  });
 
   // Initialize global persistent user preferences
   await PreferencesService().init();

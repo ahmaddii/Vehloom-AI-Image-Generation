@@ -1,8 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/profile_repository.dart';
+
+enum UsernameStatus {
+  none,
+  tooShort,
+  invalid,
+  checking,
+  available,
+  taken,
+}
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -22,6 +33,10 @@ class _SignupScreenState extends State<SignupScreen>
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+
+  Timer? _debounceTimer;
+  UsernameStatus _usernameStatus = UsernameStatus.none;
+  bool _isCheckingUsername = false;
 
   late final AnimationController _entranceController;
   late final Animation<double> _fadeAnimation;
@@ -50,6 +65,7 @@ class _SignupScreenState extends State<SignupScreen>
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -58,14 +74,95 @@ class _SignupScreenState extends State<SignupScreen>
     super.dispose();
   }
 
+  void _onUsernameChanged(String value) {
+    _debounceTimer?.cancel();
+    final clean = value.trim().replaceAll('@', '');
+
+    if (clean.isEmpty) {
+      setState(() {
+        _usernameStatus = UsernameStatus.none;
+        _isCheckingUsername = false;
+      });
+      return;
+    }
+
+    if (clean.length < 3) {
+      setState(() {
+        _usernameStatus = UsernameStatus.tooShort;
+        _isCheckingUsername = false;
+      });
+      return;
+    }
+
+    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(clean)) {
+      setState(() {
+        _usernameStatus = UsernameStatus.invalid;
+        _isCheckingUsername = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingUsername = true;
+      _usernameStatus = UsernameStatus.checking;
+    });
+
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
+      await _checkUsernameAvailability(clean);
+    });
+  }
+
+  Future<void> _checkUsernameAvailability(String username) async {
+    try {
+      final profile = await ProfileRepository().getProfileByUsername(username);
+      if (!mounted) return;
+
+      final currentClean = _usernameController.text.trim().replaceAll('@', '');
+      if (currentClean != username) return;
+
+      setState(() {
+        _isCheckingUsername = false;
+        _usernameStatus = (profile == null)
+            ? UsernameStatus.available
+            : UsernameStatus.taken;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isCheckingUsername = false;
+        _usernameStatus = UsernameStatus.available;
+      });
+    }
+  }
+
   Future<void> _handleSignUp() async {
+    final rawUsername = _usernameController.text.trim().replaceAll('@', '');
+
+    if (_usernameStatus == UsernameStatus.taken) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✕ Username already taken. Please choose another.'),
+        ),
+      );
+      return;
+    }
+
+    if (_isCheckingUsername) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Checking username availability...'),
+        ),
+      );
+      return;
+    }
+
     if (_formKey.currentState!.validate() && _agreeToTerms) {
       setState(() => _isLoading = true);
       try {
-        final response = await AuthRepository().signUp(
+        await AuthRepository().signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          username: _usernameController.text.trim(),
+          username: rawUsername,
         );
         if (mounted) {
           context.go('/');
@@ -187,13 +284,26 @@ class _SignupScreenState extends State<SignupScreen>
                       primaryColor: primaryColor,
                       surfaceColor: surfaceColor,
                       autofillHint: AutofillHints.newUsername,
+                      onChanged: _onUsernameChanged,
+                      suffixIcon: _buildUsernameSuffixIcon(primaryColor),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
+                        final clean = (value ?? '').trim().replaceAll('@', '');
+                        if (clean.isEmpty) {
                           return 'Username is required';
+                        }
+                        if (clean.length < 3) {
+                          return 'Username must be at least 3 characters';
+                        }
+                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(clean)) {
+                          return 'Only letters, numbers, and underscores allowed';
+                        }
+                        if (_usernameStatus == UsernameStatus.taken) {
+                          return 'Username already taken';
                         }
                         return null;
                       },
                     ),
+                    _buildUsernameStatusIndicator(textColor),
                     const SizedBox(height: 14),
 
                     // Email Field
@@ -419,6 +529,116 @@ class _SignupScreenState extends State<SignupScreen>
     );
   }
 
+  Widget? _buildUsernameSuffixIcon(Color primaryColor) {
+    if (_isCheckingUsername) {
+      return Padding(
+        padding: const EdgeInsets.all(14.0),
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: primaryColor,
+          ),
+        ),
+      );
+    }
+    if (_usernameStatus == UsernameStatus.available) {
+      return const Icon(
+        Icons.check_circle_rounded,
+        color: Color(0xFF2E7D32),
+        size: 22,
+      );
+    }
+    if (_usernameStatus == UsernameStatus.taken) {
+      return Icon(
+        Icons.cancel_rounded,
+        color: Colors.redAccent.shade200,
+        size: 22,
+      );
+    }
+    return null;
+  }
+
+  Widget _buildUsernameStatusIndicator(Color textColor) {
+    final rawInput = _usernameController.text.trim();
+    if (rawInput.isEmpty) return const SizedBox.shrink();
+
+    final cleanInput = rawInput.startsWith('@') ? rawInput : '@$rawInput';
+
+    if (_usernameStatus == UsernameStatus.available) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, left: 4),
+        child: Row(
+          children: [
+            const Icon(Icons.check, size: 16, color: Color(0xFF2E7D32)),
+            const SizedBox(width: 6),
+            Text(
+              '✓ Username available ($cleanInput)',
+              style: const TextStyle(
+                color: Color(0xFF2E7D32),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (_usernameStatus == UsernameStatus.taken) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, left: 4),
+        child: Row(
+          children: [
+            Icon(Icons.close, size: 16, color: Colors.redAccent.shade200),
+            const SizedBox(width: 6),
+            Text(
+              '✕ Username already taken ($cleanInput)',
+              style: TextStyle(
+                color: Colors.redAccent.shade200,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (_usernameStatus == UsernameStatus.tooShort) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, left: 4),
+        child: Text(
+          'Username must be at least 3 characters',
+          style: TextStyle(
+            color: textColor.withOpacity(0.55),
+            fontSize: 12.5,
+          ),
+        ),
+      );
+    } else if (_usernameStatus == UsernameStatus.invalid) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, left: 4),
+        child: Text(
+          'Only letters, numbers, and underscores allowed',
+          style: TextStyle(
+            color: Colors.orangeAccent.shade400,
+            fontSize: 12.5,
+          ),
+        ),
+      );
+    } else if (_isCheckingUsername) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, left: 4),
+        child: Text(
+          'Checking availability...',
+          style: TextStyle(
+            color: textColor.withOpacity(0.55),
+            fontSize: 12.5,
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
   Widget _buildTextField({
     required TextEditingController controller,
     required String hint,
@@ -430,6 +650,7 @@ class _SignupScreenState extends State<SignupScreen>
     TextInputType? keyboardType,
     String? autofillHint,
     Widget? suffixIcon,
+    ValueChanged<String>? onChanged,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
@@ -439,6 +660,7 @@ class _SignupScreenState extends State<SignupScreen>
       autofillHints: autofillHint == null ? null : [autofillHint],
       style: TextStyle(color: textColor, fontSize: 15),
       cursorColor: primaryColor,
+      onChanged: onChanged,
       validator: validator,
       decoration: InputDecoration(
         hintText: hint,
@@ -472,39 +694,6 @@ class _SignupScreenState extends State<SignupScreen>
           borderSide: BorderSide(color: Colors.redAccent.shade200, width: 1.6),
         ),
         errorStyle: TextStyle(fontSize: 12, color: Colors.redAccent.shade200),
-      ),
-    );
-  }
-
-  Widget _socialButton({
-    required Widget leading,
-    required String label,
-    required Color textColor,
-    required Color surfaceColor,
-    required VoidCallback onTap,
-  }) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        side: BorderSide(color: textColor.withOpacity(0.1)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: surfaceColor,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          leading,
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-        ],
       ),
     );
   }
