@@ -103,21 +103,11 @@ class _LoginScreenState extends State<LoginScreen>
     final bgColor = theme.scaffoldBackgroundColor;
     final surfaceColor = theme.colorScheme.surface;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: theme.brightness == Brightness.light
-            ? Brightness.dark
-            : Brightness.light,
-        statusBarBrightness: theme.brightness == Brightness.light
-            ? Brightness.light
-            : Brightness.dark,
-      ),
-      child: Scaffold(
-        backgroundColor: bgColor,
-        resizeToAvoidBottomInset: true,
-        body: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
+    return Scaffold(
+      backgroundColor: bgColor,
+      resizeToAvoidBottomInset: true,
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           child: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -381,7 +371,6 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
             ),
-          ),
         ),
     );
   }

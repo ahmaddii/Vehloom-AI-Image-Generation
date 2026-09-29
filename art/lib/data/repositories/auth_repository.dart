@@ -11,7 +11,7 @@ class AuthRepository {
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
   Future<bool> signInWithGoogle() async {
-    final redirectTo = kIsWeb ? null : 'com.example.art://login-callback';
+    final redirectTo = kIsWeb ? null : 'com.vehloom.app://login-callback';
     return await _client.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: redirectTo,
@@ -31,15 +31,16 @@ class AuthRepository {
       if (existing == null) {
         final metadata = user.userMetadata ?? {};
         final email = user.email ?? '';
-        final rawName = metadata['full_name'] ??
+        final rawName =
+            metadata['full_name'] ??
             metadata['name'] ??
             metadata['preferred_username'] ??
             (email.isNotEmpty ? email.split('@').first : 'user');
 
-        final cleanUsername = rawName
-            .toString()
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+        final cleanUsername = rawName.toString().toLowerCase().replaceAll(
+          RegExp(r'[^a-zA-Z0-9_]'),
+          '',
+        );
 
         final username = cleanUsername.isEmpty
             ? 'user_${user.id.substring(0, 6)}'
