@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/models/artwork_model.dart';
@@ -10,8 +11,8 @@ import '../../../data/repositories/profile_repository.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../../../data/repositories/social_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
-import '../../../core/widgets/custom_add_button.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/social_icons.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/number_utils.dart';
 import '../../chat/widgets/share_to_chat_bottom_sheet.dart';
@@ -243,6 +244,23 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  Future<void> _launchExternalUrl(String urlString) async {
+    var cleanUrl = urlString.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://$cleanUrl';
+    }
+    final uri = Uri.tryParse(cleanUrl);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _launchInstagram(String handle) async {
+    final cleanHandle = handle.replaceAll('@', '').trim();
+    final uri = Uri.parse('https://instagram.com/$cleanHandle');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   void _showProfileMenu() {
     showModalBottomSheet(
       context: context,
@@ -418,7 +436,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     width: 400,
                     height: (400 / 0.75).round(),
                   ),
-                  memCacheWidth: 400,
+                  memCacheHeight: 800,
                   fit: BoxFit.cover,
                   placeholder: (context, url) =>
                       Container(color: AppColors.darkGrey),
@@ -547,7 +565,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             const SizedBox(height: 24),
                             // Profile Info Row
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // Large squircle avatar
                                 Container(
@@ -583,26 +601,131 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        _profile!.displayName ??
-                                            _profile!.username,
-                                        style: TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.white,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              _profile!.displayName ??
+                                                  _profile!.username,
+                                              style: TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w900,
+                                                color: Colors.white,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (_profile!.isVerified) ...[
+                                            const SizedBox(width: 6),
+                                            Icon(
+                                              Icons.verified,
+                                              color: Colors.blueAccent,
+                                              size: 20,
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
-                                        '@${_profile!.username}',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.white.withOpacity(0.6),
+                                      GestureDetector(
+                                        onTap: _isMe
+                                            ? () => context.push('/edit-profile')
+                                            : null,
+                                        child: Text(
+                                          (_profile!.bio != null &&
+                                                  _profile!.bio!.trim().isNotEmpty)
+                                              ? _profile!.bio!
+                                              : (_isMe
+                                                  ? 'Add a bio...'
+                                                  : 'No bio available'),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w400,
+                                            color: (_profile!.bio != null &&
+                                                    _profile!.bio!.trim().isNotEmpty)
+                                                ? Colors.white.withOpacity(0.85)
+                                                : Colors.white.withOpacity(0.5),
+                                            height: 1.35,
+                                            fontStyle: (_profile!.bio == null ||
+                                                    _profile!.bio!.trim().isEmpty)
+                                                ? FontStyle.italic
+                                                : FontStyle.normal,
+                                          ),
+                                          maxLines: 4,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
+                                      if (_profile!.specialties.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: _profile!.specialties.map((s) {
+                                            return Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: Colors.white.withOpacity(0.3),
+                                                  width: 0.8,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                s,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ],
+                                      if ((_profile!.websiteUrl != null &&
+                                              _profile!.websiteUrl!.trim().isNotEmpty) ||
+                                          (_profile!.instagramUsername != null &&
+                                              _profile!.instagramUsername!.trim().isNotEmpty)) ...[
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          children: [
+                                            if (_profile!.websiteUrl != null &&
+                                                _profile!.websiteUrl!.trim().isNotEmpty) ...[
+                                              GestureDetector(
+                                                onTap: () => _launchExternalUrl(_profile!.websiteUrl!),
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(7),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withOpacity(0.18),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const WebsiteGlobeIcon(size: 18),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                            ],
+                                            if (_profile!.instagramUsername != null &&
+                                                _profile!.instagramUsername!.trim().isNotEmpty) ...[
+                                              GestureDetector(
+                                                onTap: () => _launchInstagram(_profile!.instagramUsername!),
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(7),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withOpacity(0.18),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const InstagramLogoIcon(size: 18),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
                                       const SizedBox(height: 12),
                                       if (_isBlocked)
                                         Container(
@@ -885,11 +1008,15 @@ class _SocialListBottomSheetState extends State<SocialListBottomSheet> {
                           ),
                         ),
                         subtitle: Text(
-                          '@${user.username}',
+                          (user.bio != null && user.bio!.trim().isNotEmpty)
+                              ? user.bio!
+                              : '@${user.username}',
                           style: TextStyle(
                             color: AppColors.darkGrey,
                             fontSize: 13,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         onTap: () {
                           Navigator.pop(context);

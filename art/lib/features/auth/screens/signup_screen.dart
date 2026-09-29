@@ -22,8 +22,7 @@ class SignupScreen extends StatefulWidget {
   State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen>
-    with SingleTickerProviderStateMixin {
+class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -38,29 +37,9 @@ class _SignupScreenState extends State<SignupScreen>
   UsernameStatus _usernameStatus = UsernameStatus.none;
   bool _isCheckingUsername = false;
 
-  late final AnimationController _entranceController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
-
   @override
   void initState() {
     super.initState();
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOut,
-    );
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _entranceController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-    _entranceController.forward();
   }
 
   @override
@@ -70,7 +49,6 @@ class _SignupScreenState extends State<SignupScreen>
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _entranceController.dispose();
     super.dispose();
   }
 
@@ -207,18 +185,17 @@ class _SignupScreenState extends State<SignupScreen>
       ),
       child: Scaffold(
         backgroundColor: bgColor,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Form(
-            key: _formKey,
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
+        resizeToAvoidBottomInset: true,
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Form(
+                key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                     const SizedBox(height: 20),
 
                     // Logo
@@ -506,12 +483,19 @@ class _SignupScreenState extends State<SignupScreen>
                         ),
                         GestureDetector(
                           onTap: () => context.push('/login'),
-                          child: Text(
-                            'Log In',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                              fontSize: 14,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8.0,
+                              horizontal: 4.0,
+                            ),
+                            child: Text(
+                              'Log In',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ),
@@ -524,7 +508,6 @@ class _SignupScreenState extends State<SignupScreen>
             ),
           ),
         ),
-      ),
       ),
     );
   }

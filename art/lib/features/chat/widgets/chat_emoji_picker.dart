@@ -1,5 +1,6 @@
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -7,12 +8,14 @@ import '../../../core/constants/app_colors.dart';
 class ChatEmojiPicker extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onBackspace;
+  final void Function(String emoji)? onEmojiSelected;
   final double height;
 
   const ChatEmojiPicker({
     super.key,
     required this.controller,
     required this.onBackspace,
+    this.onEmojiSelected,
     this.height = 280,
   });
 
@@ -34,6 +37,9 @@ class ChatEmojiPicker extends StatelessWidget {
                 offset: start + emoji.emoji.length,
               ),
             );
+            if (onEmojiSelected != null) {
+              onEmojiSelected!(emoji.emoji);
+            }
           },
           onBackspacePressed: onBackspace,
           config: Config(
@@ -42,10 +48,15 @@ class ChatEmojiPicker extends StatelessWidget {
             emojiViewConfig: EmojiViewConfig(
               backgroundColor: AppColors.creamBg,
               columns: 7,
-              emojiSizeMax: 32 * (defaultTargetPlatform == TargetPlatform.iOS ? 1.15 : 1.0),
+              emojiSizeMax:
+                  32 *
+                  (defaultTargetPlatform == TargetPlatform.iOS ? 1.15 : 1.0),
               verticalSpacing: 2,
               horizontalSpacing: 2,
-              gridPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              gridPadding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 6,
+              ),
               recentsLimit: 32,
               noRecents: Text(
                 'No recent emojis',
@@ -118,7 +129,11 @@ class ChatReactionBar extends StatelessWidget {
             ),
             if (onMoreReactions != null)
               IconButton(
-                icon: Icon(Icons.add_reaction_outlined, color: AppColors.coral, size: 22),
+                icon: Icon(
+                  Icons.add_reaction_outlined,
+                  color: AppColors.coral,
+                  size: 22,
+                ),
                 onPressed: onMoreReactions,
                 padding: const EdgeInsets.all(6),
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -152,9 +167,10 @@ class _ReactionButtonState extends State<_ReactionButton>
       vsync: this,
       duration: const Duration(milliseconds: 120),
     );
-    _scale = Tween<double>(begin: 1, end: 1.35).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _scale = Tween<double>(
+      begin: 1,
+      end: 1.35,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
   }
 
   @override

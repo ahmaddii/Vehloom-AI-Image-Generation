@@ -780,18 +780,35 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                         ],
                                       ),
                                       SizedBox(height: 6),
-                                      Text(
-                                        isMe
-                                            ? 'You'
-                                            : (creator.displayName ??
-                                                  creator.username),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: isMe
-                                              ? FontWeight.bold
-                                              : FontWeight.w600,
-                                          color: AppColors.black,
-                                        ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              isMe
+                                                  ? 'You'
+                                                  : (creator.displayName ??
+                                                        creator.username),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: isMe
+                                                    ? FontWeight.bold
+                                                    : FontWeight.w600,
+                                                color: AppColors.black,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (!isMe && creator.isVerified) ...[
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.verified,
+                                              color: Colors.blueAccent,
+                                              size: 14,
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -1305,10 +1322,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
               ),
               const Divider(),
               ListTile(
-                leading: Icon(
-                  Icons.send_outlined,
-                  color: AppColors.black,
-                ),
+                leading: Icon(Icons.send_outlined, color: AppColors.black),
                 title: Text(
                   'Send Creator in Chat',
                   style: TextStyle(
@@ -1322,9 +1336,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                     context: context,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
-                    builder: (context) => ShareToChatBottomSheet(
-                      sharedProfileId: creator.id,
-                    ),
+                    builder: (context) =>
+                        ShareToChatBottomSheet(sharedProfileId: creator.id),
                   );
                 },
               ),
@@ -1343,9 +1356,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
         return Container(
           decoration: BoxDecoration(
             color: AppColors.creamBg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1360,49 +1373,69 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                   ),
                 ),
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               Text(
-                'Your Story',
+                'Add to Story',
                 style: TextStyle(
                   color: AppColors.black,
                   fontWeight: FontWeight.w900,
-                  fontSize: 18,
+                  fontSize: 20,
                 ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 24),
-              ListTile(
-                leading: Icon(
-                  Icons.add_photo_alternate_outlined,
-                  color: AppColors.coral,
+              const SizedBox(height: 8),
+              Text(
+                'Share a photo with your followers for 24 hours',
+                style: TextStyle(
+                  color: AppColors.darkGrey,
+                  fontSize: 13,
                 ),
-                title: Text(
-                  'Post a Photo Story',
-                  style: TextStyle(
-                    color: AppColors.black,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _uploadStoryFromGallery();
-                },
+                textAlign: TextAlign.center,
               ),
-              const Divider(),
-              ListTile(
-                leading: Icon(Icons.person_outline, color: AppColors.black),
-                title: Text(
-                  'View Profile',
-                  style: TextStyle(
-                    color: AppColors.black,
-                    fontWeight: FontWeight.bold,
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStoryOptionCard(
+                      icon: Icons.camera_alt_rounded,
+                      title: 'Camera',
+                      color: AppColors.coral,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _uploadStory(ImageSource.camera);
+                      },
+                    ),
                   ),
-                ),
-                onTap: () {
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildStoryOptionCard(
+                      icon: Icons.photo_library_rounded,
+                      title: 'Gallery',
+                      color: Colors.blueAccent,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _uploadStory(ImageSource.gallery);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
                   Navigator.pop(context);
                   context.go('/profile');
                 },
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text(
+                  'View My Profile',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         );
@@ -1410,13 +1443,64 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
     );
   }
 
-  Future<void> _uploadStoryFromGallery() async {
+  Widget _buildStoryOptionCard({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: BoxDecoration(
+          color: AppColors.creamLight,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.lightGrey.withOpacity(0.3),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Future<void> _uploadStory(ImageSource source) async {
     final currentUserId = AuthRepository().currentUser?.id;
     if (currentUserId == null) return;
 
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       maxWidth: 1920,
       maxHeight: 1080,
       imageQuality: 85,

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:gal/gal.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -117,23 +119,139 @@ class _AiArtGenerationScreenState extends State<AiArtGenerationScreen> {
         finalPrompt += ', centered horizontal landscape composition, wide shot';
       }
 
-      final encodedPrompt = Uri.encodeComponent(finalPrompt);
+      final hfToken = dotenv.env['HUGGINGFACE_API_TOKEN'] ?? '';
+      const modelId = 'black-forest-labs/FLUX.1-schnell';
 
-      final url = Uri.parse(
-        'https://image.pollinations.ai/prompt/$encodedPrompt?model=gpt-image-2&width=$_imageWidth&height=$_imageHeight&nologo=true&enhance=$_autoEnhance',
-      );
+      // Step 1: Auto-discover live providers for black-forest-labs/FLUX.1-schnell from HF API (matches Python InferenceClient provider="auto")
+      List<String> candidateProviders = ['nscale', 'wavespeed', 'fal-ai', 'hf-inference'];
+      try {
+        final mappingUri = Uri.parse(
+          'https://huggingface.co/api/models/$modelId?expand=inferenceProviderMapping',
+        );
+        final mapRes = await http.get(mappingUri).timeout(const Duration(seconds: 10));
+        if (mapRes.statusCode == 200) {
+          final mapData = jsonDecode(mapRes.body);
+          if (mapData is Map && mapData.containsKey('inferenceProviderMapping')) {
+            final mapping = mapData['inferenceProviderMapping'] as Map;
+            final liveProviders = <String>[];
+            mapping.forEach((pKey, pVal) {
+              if (pVal is Map && pVal['status'] == 'live') {
+                liveProviders.add(pKey.toString());
+              }
+            });
+            if (liveProviders.isNotEmpty) {
+              candidateProviders = [...liveProviders, ...candidateProviders];
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Provider discovery fallback: $e');
+      }
 
-      final response = await http.get(url).timeout(const Duration(seconds: 90));
+      http.Response? response;
+      String lastAttemptedUrl = '';
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        if (hfToken.isNotEmpty) 'Authorization': 'Bearer $hfToken',
+      };
+
+      // Step 2: Request image generation from the live auto-discovered provider
+      for (final provider in candidateProviders.toSet()) {
+        final url1 = 'https://router.huggingface.co/$provider/v1/images/generations';
+        lastAttemptedUrl = url1;
+        final payload1 = jsonEncode({
+          'model': modelId,
+          'prompt': finalPrompt,
+          'size': '${_imageWidth}x$_imageHeight',
+        });
+
+        try {
+          final res1 = await http
+              .post(Uri.parse(url1), headers: headers, body: payload1)
+              .timeout(const Duration(seconds: 90));
+          if (res1.statusCode == 200) {
+            response = res1;
+            break;
+          }
+        } catch (_) {}
+
+        final url2 = 'https://router.huggingface.co/$provider/models/$modelId';
+        lastAttemptedUrl = url2;
+        final payload2 = jsonEncode({
+          'inputs': finalPrompt,
+          'parameters': {
+            'width': _imageWidth,
+            'height': _imageHeight,
+          },
+        });
+
+        try {
+          final res2 = await http
+              .post(Uri.parse(url2), headers: headers, body: payload2)
+              .timeout(const Duration(seconds: 90));
+          if (res2.statusCode == 200) {
+            response = res2;
+            break;
+          }
+        } catch (_) {}
+      }
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
+      if (response != null && response.statusCode == 200) {
+        Uint8List imageBytes = response.bodyBytes;
+        try {
+          final responseString = utf8.decode(response.bodyBytes, allowMalformed: true);
+          final trimmed = responseString.trim();
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            final dynamic jsonResponse = jsonDecode(trimmed);
+            if (jsonResponse is Map) {
+              if (jsonResponse.containsKey('data') && jsonResponse['data'] is List) {
+                final list = jsonResponse['data'] as List;
+                if (list.isNotEmpty && list[0] is Map) {
+                  final first = list[0] as Map;
+                  if (first.containsKey('b64_json')) {
+                    imageBytes = base64Decode(first['b64_json'].toString());
+                  } else if (first.containsKey('url')) {
+                    final imgRes = await http.get(Uri.parse(first['url'].toString()));
+                    if (imgRes.statusCode == 200) {
+                      imageBytes = imgRes.bodyBytes;
+                    }
+                  }
+                }
+              } else if (jsonResponse.containsKey('image')) {
+                final b64Str = jsonResponse['image'] as String;
+                imageBytes = base64Decode(
+                  b64Str.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), ''),
+                );
+              }
+            } else if (jsonResponse is List && jsonResponse.isNotEmpty && jsonResponse[0] is Map) {
+              final first = jsonResponse[0] as Map;
+              if (first.containsKey('generated_image') || first.containsKey('image')) {
+                final b64Str = (first['generated_image'] ?? first['image']) as String;
+                imageBytes = base64Decode(
+                  b64Str.replaceFirst(RegExp(r'data:image/[^;]+;base64,'), ''),
+                );
+              }
+            }
+          }
+        } catch (_) {
+          // Binary image output bytes handled directly
+        }
+
         setState(() {
-          _generatedImageBytes = response.bodyBytes;
+          _generatedImageBytes = imageBytes;
         });
       } else {
+        final errText = response?.body ?? 'No response from Hugging Face providers';
+        final status = response?.statusCode ?? 500;
+        debugPrint(
+          'Hugging Face FLUX Generation Error [$status] ($lastAttemptedUrl): $errText',
+        );
         setState(() {
-          _errorMessage = 'Failed to generate image. Please try again.';
+          _errorMessage =
+              'Hugging Face FLUX Error ($status): $errText';
         });
       }
     } on TimeoutException {

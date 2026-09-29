@@ -7,6 +7,7 @@ import '../../../data/models/chat_room_model.dart';
 import '../../../data/models/profile_model.dart';
 import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/profile_repository.dart';
+import '../widgets/inbox_skeleton.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -439,7 +440,7 @@ class _InboxScreenState extends State<InboxScreen> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
-              return const SizedBox.shrink();
+              return const InboxSkeleton();
             }
 
             if (snapshot.hasError) {

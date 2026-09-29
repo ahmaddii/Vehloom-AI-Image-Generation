@@ -312,11 +312,20 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '@${creator.username}',
+                        creator.specialties.isNotEmpty
+                            ? creator.specialties.join(' • ')
+                            : (creator.bio != null && creator.bio!.isNotEmpty
+                                ? creator.bio!
+                                : '@${creator.username}'),
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.black.withOpacity(0.5),
+                          color: AppColors.darkGrey,
+                          fontWeight: creator.specialties.isNotEmpty
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (likes > 0 || followers > 0) ...[
                         const SizedBox(height: 4),

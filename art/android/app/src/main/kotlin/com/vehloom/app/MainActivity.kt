@@ -1,4 +1,4 @@
-package com.example.art
+package com.vehloom.app
 
 import io.flutter.embedding.android.FlutterActivity
 

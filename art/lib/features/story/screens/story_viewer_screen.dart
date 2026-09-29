@@ -362,15 +362,32 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    user?.displayName ??
-                                        user?.username ??
-                                        'Anonymous',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          user?.displayName ??
+                                              user?.username ??
+                                              'Anonymous',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (user != null && user!.isVerified) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.verified,
+                                          color: Colors.white,
+                                          size: 14,
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                   Text(
                                     timeago.format(

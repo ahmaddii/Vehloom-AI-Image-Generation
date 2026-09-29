@@ -17,6 +17,7 @@ import '../../../data/models/artwork_model.dart';
 import '../../../data/repositories/artwork_repository.dart';
 import '../widgets/chat_emoji_picker.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/chat_messages_skeleton.dart';
 
 class ChatScreen extends StatefulWidget {
   final String roomId;
@@ -60,12 +61,81 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? _typingTimer;
   Timer? _otherUserTypingTimer;
   Timer? _readMarkTimer;
-  bool _showEmojiPicker = false;
   bool _isLoadingMore = false;
 
+  final Map<String, Map<String, List<String>>> _localReactions = {};
   final Map<String, ArtworkModel?> _artworkCache = {};
   final Map<String, ProfileModel?> _profileCache = {};
   final Set<String> _prefetchInFlight = {};
+
+  void _onToggleReaction(MessageModel message, String emoji) {
+    final userId = _currentUserId;
+    if (userId == null) return;
+
+    final messageId = message.id;
+    Map<String, List<String>> currentReactions = {};
+
+    if (_localReactions.containsKey(messageId)) {
+      currentReactions = Map<String, List<String>>.from(
+        _localReactions[messageId]!.map(
+          (k, v) => MapEntry(k, List<String>.from(v)),
+        ),
+      );
+    } else if (message.reactions.isNotEmpty) {
+      currentReactions = Map<String, List<String>>.from(
+        message.reactions.map(
+          (k, v) => MapEntry(k, List<String>.from(v)),
+        ),
+      );
+    }
+
+    final hadThisReaction = currentReactions.containsKey(emoji) &&
+        currentReactions[emoji]!.contains(userId);
+
+    // One reaction per user: remove user from all reaction keys first
+    for (final key in currentReactions.keys.toList()) {
+      currentReactions[key]!.remove(userId);
+      if (currentReactions[key]!.isEmpty) {
+        currentReactions.remove(key);
+      }
+    }
+
+    if (!hadThisReaction) {
+      currentReactions.putIfAbsent(emoji, () => []).add(userId);
+    }
+
+    setState(() {
+      _localReactions[messageId] = currentReactions;
+
+      final optIdx = _optimisticMessages.indexWhere((m) => m.id == messageId);
+      if (optIdx != -1) {
+        _optimisticMessages[optIdx] = _optimisticMessages[optIdx].copyWith(
+          reactions: currentReactions,
+        );
+      }
+    });
+
+    _chatRepo.toggleReaction(messageId, userId, emoji).then((_) {
+      if (mounted) {
+        setState(() {
+          _localReactions.remove(messageId);
+        });
+      }
+    }).catchError((e) {
+      if (mounted) {
+        setState(() {
+          _localReactions.remove(messageId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Reaction failed: $e',
+            ),
+          ),
+        );
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -215,9 +285,54 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickAndSendImage() async {
     if (_currentUserId == null || _isSending) return;
 
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.creamBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.lightGrey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.coral.withValues(alpha: 0.1),
+                  child: const Icon(Icons.photo_library_outlined, color: AppColors.coral),
+                ),
+                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.coral.withValues(alpha: 0.1),
+                  child: const Icon(Icons.camera_alt_outlined, color: AppColors.coral),
+                ),
+                title: const Text('Take a Photo', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       imageQuality: 70,
     );
 
@@ -232,6 +347,7 @@ class _ChatScreenState extends State<ChatScreen> {
       id: messageId,
       senderId: _currentUserId,
       content: 'Sent an image',
+      imageUrl: pickedFile.path,
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
     );
@@ -244,7 +360,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final file = File(pickedFile.path);
-      final imageUrl = await _chatRepo.uploadImage(file);
+      final imageUrl = await _chatRepo.uploadImage(file, _currentUserId);
       await _chatRepo.sendMessage(
         widget.roomId,
         _currentUserId,
@@ -258,7 +374,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to send image')));
+        ).showSnackBar(SnackBar(content: Text('Failed to send image: $e')));
       }
     } finally {
       if (mounted) {
@@ -484,7 +600,8 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Scaffold(body: Center(child: Text('Not logged in')));
     }
 
-    final displayName = _otherUserProfile?.displayName ?? 'Chat';
+    final rawName = _otherUserProfile?.displayName ?? _otherUserProfile?.username;
+    final displayName = rawName != null ? '@$rawName' : 'Chat';
     final avatarUrl = _otherUserProfile?.avatarUrl;
 
     return Scaffold(
@@ -584,7 +701,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 }
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const SizedBox.shrink();
+                  return const ChatMessagesSkeleton();
                 }
 
                 final streamMessages = snapshot.data ?? [];
@@ -606,11 +723,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     if (index == allMessages.length) {
                       return _buildProfileHeader();
                     }
-                    final msg = allMessages[index];
+                    final rawMsg = allMessages[index];
+                    final msg = _localReactions.containsKey(rawMsg.id)
+                        ? rawMsg.copyWith(reactions: _localReactions[rawMsg.id]!)
+                        : rawMsg;
                     final isMe = msg.senderId == _currentUserId;
 
-                    // Show a date divider above the oldest message of each
-                    // day. Because the list is sorted newest -> oldest and
+                    // Message list is reverse:true, so allMessages[index] is rendered
+                    // bottom-to-top. To check if a date header is needed above this
+                    // message (chronologically before), we compare against
+                    // allMessages[index + 1]. Since the list is sorted desc and
                     // rendered with reverse:true, "index + 1" is the
                     // chronologically-previous message.
                     final isFirstOfDay =
@@ -641,13 +763,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       : null,
                                   onLongPress: () =>
                                       _showMessageActions(msg, isMe),
-                                  onReactionTap: (emoji) {
-                                    _chatRepo.toggleReaction(
-                                      msg.id,
-                                      _currentUserId,
-                                      emoji,
-                                    );
-                                  },
+                                  onReactionTap: (emoji) =>
+                                      _onToggleReaction(msg, emoji),
                                 ),
                                 const SizedBox(width: 6),
                                 _buildTimeAndStatus(msg, isMe),
@@ -667,13 +784,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       : null,
                                   onLongPress: () =>
                                       _showMessageActions(msg, isMe),
-                                  onReactionTap: (emoji) {
-                                    _chatRepo.toggleReaction(
-                                      msg.id,
-                                      _currentUserId,
-                                      emoji,
-                                    );
-                                  },
+                                  onReactionTap: (emoji) =>
+                                      _onToggleReaction(msg, emoji),
                                 ),
                               ],
                       ),
@@ -774,139 +886,74 @@ class _ChatScreenState extends State<ChatScreen> {
             color: AppColors.creamBg,
             child: SafeArea(
               top: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.image_outlined,
-                          color: AppColors.coral,
-                        ),
-                        onPressed: _pickAndSendImage,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
-                        ),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          onChanged: _onMessageChanged,
-                          onTap: () {
-                            if (_showEmojiPicker) {
-                              setState(() => _showEmojiPicker = false);
-                            }
-                          },
-                          decoration: InputDecoration(
-                            hintText: 'Message...',
-                            hintStyle: TextStyle(color: AppColors.lightGrey),
-                            filled: true,
-                            fillColor: AppColors.creamLight,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      onChanged: _onMessageChanged,
+                      decoration: InputDecoration(
+                        prefixIcon: Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.image_outlined,
+                              color: AppColors.coral,
+                              size: 22,
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 10,
+                            onPressed: _pickAndSendImage,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
                             ),
                           ),
-                          textCapitalization: TextCapitalization.sentences,
-                          textInputAction: TextInputAction.newline,
-                          minLines: 1,
-                          maxLines: 5,
+                        ),
+                        hintText: 'Message...',
+                        hintStyle: TextStyle(color: AppColors.lightGrey),
+                        filled: true,
+                        fillColor: AppColors.creamLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(
-                          _showEmojiPicker
-                              ? Icons.keyboard_outlined
-                              : Icons.emoji_emotions_outlined,
-                          color: AppColors.coral,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _showEmojiPicker = !_showEmojiPicker;
-                          });
-                          if (_showEmojiPicker) {
-                            FocusScope.of(context).unfocus();
-                          }
-                        },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        height: 44,
-                        width: 44,
-                        decoration: const BoxDecoration(
-                          color: AppColors.coral,
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          onPressed: _sendMessage,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_showEmojiPicker)
-                    RepaintBoundary(
-                      child: ChatEmojiPicker(
-                        controller: _messageController,
-                        onBackspace: () {
-                          final text = _messageController.text;
-                          final selection = _messageController.selection;
-                          if (text.isEmpty) return;
-                          final start = selection.start >= 0
-                              ? selection.start
-                              : text.length;
-                          final end = selection.end >= 0
-                              ? selection.end
-                              : text.length;
-                          if (start != end) {
-                            _messageController.text = text.replaceRange(
-                              start,
-                              end,
-                              '',
-                            );
-                            _messageController.selection =
-                                TextSelection.collapsed(offset: start);
-                          } else if (start > 0) {
-                            final beforeCursor = text.substring(0, start);
-                            final afterCursor = text.substring(end);
-                            final runes = beforeCursor.runes.toList();
-                            if (runes.isEmpty) return;
-                            runes.removeLast();
-                            final newBefore = String.fromCharCodes(runes);
-                            _messageController.text = newBefore + afterCursor;
-                            _messageController.selection =
-                                TextSelection.collapsed(
-                                  offset: newBefore.length,
-                                );
-                          }
-                        },
-                      ),
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.newline,
+                      minLines: 1,
+                      maxLines: 5,
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    height: 44,
+                    width: 44,
+                    decoration: const BoxDecoration(
+                      color: AppColors.coral,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: _sendMessage,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -967,17 +1014,33 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            _otherUserProfile!.displayName ?? 'User',
+            '@${_otherUserProfile!.displayName ?? _otherUserProfile!.username}',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: AppColors.black,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            '@${_otherUserProfile!.username}',
-            style: TextStyle(fontSize: 16, color: AppColors.lightGrey),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              (_otherUserProfile!.bio != null &&
+                      _otherUserProfile!.bio!.trim().isNotEmpty)
+                  ? _otherUserProfile!.bio!
+                  : 'No bio available',
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.darkGrey,
+                fontStyle: (_otherUserProfile!.bio != null &&
+                        _otherUserProfile!.bio!.trim().isNotEmpty)
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+              ),
+            ),
           ),
           const SizedBox(height: 10),
           ElevatedButton(
@@ -1027,10 +1090,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: ChatReactionBar(
                     onReactionSelected: (emoji) {
                       Navigator.pop(context);
-                      final userId = _currentUserId;
-                      if (userId != null) {
-                        _chatRepo.toggleReaction(msg.id, userId, emoji);
-                      }
+                      _onToggleReaction(msg, emoji);
                     },
                   ),
                 ),

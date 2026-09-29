@@ -12,7 +12,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -56,30 +56,10 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  late final AnimationController _entranceController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<Offset> _slideAnimation;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOut,
-    );
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _entranceController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-    _entranceController.forward();
   }
 
   @override
@@ -87,7 +67,6 @@ class _LoginScreenState extends State<LoginScreen>
     WidgetsBinding.instance.removeObserver(this);
     _emailController.dispose();
     _passwordController.dispose();
-    _entranceController.dispose();
     super.dispose();
   }
 
@@ -136,18 +115,17 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       child: Scaffold(
         backgroundColor: bgColor,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Form(
-              key: _formKey,
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+        resizeToAvoidBottomInset: true,
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                       const SizedBox(height: 20),
 
                       // Logo
@@ -364,21 +342,6 @@ class _LoginScreenState extends State<LoginScreen>
                         onTap: _handleGoogleSignIn,
                       ),
 
-                      const SizedBox(height: 12),
-
-                      // Facebook Button
-                      _socialButton(
-                        leading: Icon(
-                          Icons.facebook,
-                          size: 22,
-                          color: textColor.withOpacity(0.85),
-                        ),
-                        label: 'Continue with Facebook',
-                        textColor: textColor,
-                        surfaceColor: surfaceColor,
-                        onTap: () {},
-                      ),
-
                       const SizedBox(height: 32),
 
                       // Footer
@@ -394,12 +357,19 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           GestureDetector(
                             onTap: () => context.push('/signup'),
-                            child: Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: textColor,
-                                fontSize: 14,
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8.0,
+                                horizontal: 4.0,
+                              ),
+                              child: Text(
+                                'Sign Up',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),
@@ -413,7 +383,6 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-      ),
     );
   }
 

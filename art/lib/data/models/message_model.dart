@@ -78,23 +78,25 @@ class MessageModel {
   }
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'id': id,
       'senderId': senderId,
       'content': content,
       'timestamp': timestamp.toIso8601String(),
       'isRead': isRead,
-      'replyToId': replyToId,
-      'replyToContent': replyToContent,
-      'imageUrl': imageUrl,
-      'sharedArtworkId': sharedArtworkId,
-      'sharedProfileId': sharedProfileId,
-      'reactions': reactions,
-      'deletedFor': deletedFor,
-      'deletedForEveryone': deletedForEveryone,
-      'deletedAt': deletedAt?.toIso8601String(),
-      // status is transient and not saved to the DB
     };
+
+    if (replyToId != null) map['replyToId'] = replyToId;
+    if (replyToContent != null) map['replyToContent'] = replyToContent;
+    if (imageUrl != null) map['imageUrl'] = imageUrl;
+    if (sharedArtworkId != null) map['sharedArtworkId'] = sharedArtworkId;
+    if (sharedProfileId != null) map['sharedProfileId'] = sharedProfileId;
+    map['reactions'] = reactions;
+    if (deletedFor.isNotEmpty) map['deletedFor'] = deletedFor;
+    if (deletedForEveryone) map['deletedForEveryone'] = deletedForEveryone;
+    if (deletedAt != null) map['deletedAt'] = deletedAt!.toIso8601String();
+
+    return map;
   }
 
   MessageModel copyWith({

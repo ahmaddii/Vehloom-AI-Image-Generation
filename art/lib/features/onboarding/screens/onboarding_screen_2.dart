@@ -5,8 +5,6 @@ class OnboardingScreen2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Onboarding Slide 2')),
-    );
+    return const Scaffold(body: Center(child: Text('Onboarding Slide 2')));
   }
 }

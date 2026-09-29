@@ -346,21 +346,6 @@ class _AuthOptionsScreenState extends State<AuthOptionsScreen>
                             ),
                             child: Column(
                               children: [
-                                // Facebook Button
-                                _socialButton(
-                                  leading: Icon(
-                                    Icons.facebook,
-                                    size: 22,
-                                    color: textColor.withOpacity(0.85),
-                                  ),
-                                  label: 'Continue with Facebook',
-                                  textColor: textColor,
-                                  surfaceColor: surfaceColor,
-                                  onTap: () {},
-                                ),
-
-                                const SizedBox(height: 12),
-
                                 // Email Button
                                 _socialButton(
                                   leading: Icon(

@@ -45,7 +45,15 @@ class AuthRepository {
             ? 'user_${user.id.substring(0, 6)}'
             : cleanUsername;
 
-        final avatarUrl = metadata['avatar_url'] ?? metadata['picture'];
+        dynamic rawAvatar = metadata['avatar_url'] ?? metadata['picture'];
+        String? avatarUrl;
+        if (rawAvatar is String) {
+          avatarUrl = rawAvatar;
+        } else if (rawAvatar is Map &&
+            rawAvatar['data'] != null &&
+            rawAvatar['data']['url'] != null) {
+          avatarUrl = rawAvatar['data']['url'].toString();
+        }
 
         await _client.from('profiles').upsert({
           'id': user.id,

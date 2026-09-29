@@ -57,15 +57,52 @@ class ProfileRepository {
     final cleanQuery = query.trim().replaceAll('#', '');
     if (cleanQuery.isEmpty) return [];
     try {
-      final response = await _client
+      final qLower = cleanQuery.toLowerCase();
+
+      // 1. Text search on username, display_name, bio
+      final textResponse = await _client
           .from('profiles')
           .select()
-          .or('username.ilike.%$cleanQuery%,display_name.ilike.%$cleanQuery%')
-          .limit(20);
+          .or('username.ilike.%$cleanQuery%,display_name.ilike.%$cleanQuery%,bio.ilike.%$cleanQuery%')
+          .limit(40);
 
-      return (response as List)
+      final List<ProfileModel> textResults = (textResponse as List)
           .map((json) => ProfileModel.fromJson(json))
           .toList();
+
+      final Map<String, ProfileModel> profileMap = {
+        for (final p in textResults) p.id: p
+      };
+
+      // 2. Specialty match check against all creators
+      final allProfilesResponse = await _client.from('profiles').select().limit(100);
+      final allProfiles = (allProfilesResponse as List)
+          .map((json) => ProfileModel.fromJson(json))
+          .toList();
+
+      for (final p in allProfiles) {
+        if (!profileMap.containsKey(p.id)) {
+          final matchesSpecialty = p.specialties.any(
+            (spec) => spec.toLowerCase().contains(qLower),
+          );
+          if (matchesSpecialty) {
+            profileMap[p.id] = p;
+          }
+        }
+      }
+
+      final finalResults = profileMap.values.toList();
+
+      // Sort: artists with matching specialty tag appear first
+      finalResults.sort((a, b) {
+        final aMatchSpec = a.specialties.any((s) => s.toLowerCase().contains(qLower));
+        final bMatchSpec = b.specialties.any((s) => s.toLowerCase().contains(qLower));
+        if (aMatchSpec && !bMatchSpec) return -1;
+        if (!aMatchSpec && bMatchSpec) return 1;
+        return 0;
+      });
+
+      return finalResults;
     } catch (_) {
       return [];
     }
@@ -87,11 +124,17 @@ class ProfileRepository {
     String? displayName,
     String? bio,
     String? avatarUrl,
+    String? websiteUrl,
+    String? instagramUsername,
+    List<String>? specialties,
   }) async {
     final updates = <String, dynamic>{};
     if (displayName != null) updates['display_name'] = displayName;
     if (bio != null) updates['bio'] = bio;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
+    if (websiteUrl != null) updates['website_url'] = websiteUrl;
+    if (instagramUsername != null) updates['instagram_username'] = instagramUsername;
+    if (specialties != null) updates['specialties'] = specialties;
 
     if (updates.isNotEmpty) {
       await _client.from('profiles').update(updates).eq('id', id);

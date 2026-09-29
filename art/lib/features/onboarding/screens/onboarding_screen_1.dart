@@ -27,7 +27,7 @@ class _OnboardingScreen1State extends State<OnboardingScreen1> {
           final ext = i == 2 ? 'png' : 'jpg';
           precacheImage(AssetImage('assets/onboarding3/$i.$ext'), context);
         }
-        
+
         // Request notification permission here instead of splash screen
         PushNotificationService().init().catchError((e) {
           debugPrint('Error initializing push notifications: $e');

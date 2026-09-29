@@ -367,14 +367,29 @@ class ArtworkRepository {
             }
           }
           if (rpcArtworks.isNotEmpty) {
-            return rpcArtworks.take(limit).toList();
+            // Sort RPC artworks by engagement score
+            rpcArtworks.sort((a, b) {
+              final aScore = (a.likesCount * 3) + a.commentsCount;
+              final bScore = (b.likesCount * 3) + b.commentsCount;
+              if (aScore == bScore) {
+                return b.createdAt.compareTo(a.createdAt);
+              }
+              return bScore.compareTo(aScore);
+            });
+
+            // Use RPC result if top item actually has engagement (>0 likes/comments)
+            final topRpcScore =
+                (rpcArtworks.first.likesCount * 3) + rpcArtworks.first.commentsCount;
+            if (topRpcScore > 0) {
+              return rpcArtworks.take(limit).toList();
+            }
           }
         }
       } catch (_) {
         // RPC fallback to standard daily query if RPC is not present or fails
       }
 
-      // Standard query fallback (artworks created today)
+      // Standard query (artworks created today + overall trending fallback)
       final now = DateTime.now().toUtc();
       final startOfDay = DateTime.utc(
         now.year,
@@ -397,23 +412,47 @@ class ArtworkRepository {
           .order('created_at', ascending: false)
           .limit(100);
 
-      var artworks =
-          (response as List).map((json) => ArtworkModel.fromJson(json)).toList()
-            ..sort((a, b) {
-              final aScore = (a.likesCount * 3) + a.commentsCount;
-              final bScore = (b.likesCount * 3) + b.commentsCount;
-              if (aScore == bScore) {
-                return b.createdAt.compareTo(a.createdAt);
-              }
-              return bScore.compareTo(aScore);
-            });
+      final List<ArtworkModel> todayArtworks =
+          (response as List).map((json) => ArtworkModel.fromJson(json)).toList();
 
-      // Fallback: If no artworks were created today yet, fetch top overall trending
-      if (artworks.isEmpty) {
-        artworks = await fetchTrendingArtworks(limit: limit);
+      // Fetch top overall trending artworks to ensure top ranks have actual engagement
+      final trendingArtworks = await fetchTrendingArtworks(limit: limit);
+
+      // Merge today's artworks and trending artworks (avoiding duplicates)
+      final Map<String, ArtworkModel> mergedMap = {};
+      for (final art in todayArtworks) {
+        mergedMap[art.id] = art;
+      }
+      for (final art in trendingArtworks) {
+        if (!mergedMap.containsKey(art.id)) {
+          mergedMap[art.id] = art;
+        }
       }
 
-      return artworks.take(limit).toList();
+      final mergedArtworks = mergedMap.values.toList();
+      final startOfDayDt = DateTime.parse(startOfDay);
+
+      // Ranking & Scoring:
+      // - Base Score = (likesCount * 3) + commentsCount
+      // - Freshness boost for today's posts that have actual engagement (> 0)
+      // - Artworks with 0 likes and 0 comments have score = 0 and stay below posts with engagement.
+      mergedArtworks.sort((a, b) {
+        final aBaseScore = (a.likesCount * 3) + a.commentsCount;
+        final bBaseScore = (b.likesCount * 3) + b.commentsCount;
+
+        final isAToday = a.createdAt.isAfter(startOfDayDt);
+        final isBToday = b.createdAt.isAfter(startOfDayDt);
+
+        final double aScore = (aBaseScore > 0 && isAToday) ? aBaseScore * 1.5 : aBaseScore.toDouble();
+        final double bScore = (bBaseScore > 0 && isBToday) ? bBaseScore * 1.5 : bBaseScore.toDouble();
+
+        if (aScore == bScore) {
+          return b.createdAt.compareTo(a.createdAt);
+        }
+        return bScore.compareTo(aScore);
+      });
+
+      return mergedArtworks.take(limit).toList();
     } catch (_) {
       return [];
     }

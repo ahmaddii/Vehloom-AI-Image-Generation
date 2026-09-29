@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../data/repositories/profile_repository.dart';
 import '../../../data/models/profile_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -230,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
-                          foregroundColor: AppColors.creamLight,
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: () async {
@@ -540,19 +541,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildListTile(
                 icon: Icons.help_outline,
                 title: 'Help Center',
-                onTap: () {},
+                onTap: () async {
+                  final url = Uri.parse('https://vehloom.vercel.app/help-center');
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
               ),
               _buildDivider(),
               _buildListTile(
                 icon: Icons.report_problem_outlined,
                 title: 'Report a Problem',
-                onTap: () {},
+                onTap: () async {
+                  final url = Uri.parse('https://vehloom.vercel.app/report-problem');
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
               ),
               _buildDivider(),
               _buildListTile(
                 icon: Icons.info_outline,
                 title: 'Terms & Privacy Policy',
-                onTap: () {},
+                onTap: () async {
+                  final url = Uri.parse('https://vehloom.vercel.app/privacy');
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
               ),
             ]),
 

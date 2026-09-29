@@ -244,12 +244,22 @@ class ChatRepository {
     return age <= deleteForEveryoneWindow;
   }
 
-  Future<String> uploadImage(File file) async {
-    final ext = file.path.split('.').last;
+  Future<String> uploadImage(File file, [String? userId]) async {
+    final uid = userId ?? _supabase.auth.currentUser?.id ?? 'guest';
+    final cleanExt = file.path.split('.').last.split('?').first.toLowerCase();
+    final ext = cleanExt.isEmpty ? 'jpg' : cleanExt;
     final fileName = '${const Uuid().v4()}.$ext';
-    final path = 'chat_images/$fileName';
+    final path = '$uid/chat_images/$fileName';
 
-    await _supabase.storage.from('artworks').upload(path, file);
+    final bytes = await file.readAsBytes();
+    await _supabase.storage.from('artworks').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        upsert: true,
+        contentType: 'image/$ext',
+      ),
+    );
     return _supabase.storage.from('artworks').getPublicUrl(path);
   }
 
@@ -259,50 +269,56 @@ class ChatRepository {
     String currentUserId,
     String reaction,
   ) async {
-    final response = await _supabase
-        .from('messages')
-        .select('reactions')
-        .eq('id', messageId)
-        .single();
+    try {
+      final response = await _supabase
+          .from('messages')
+          .select('reactions')
+          .eq('id', messageId)
+          .maybeSingle();
 
-    final currentReactionsData = response['reactions'];
-    Map<String, dynamic> rawReactions = {};
-    if (currentReactionsData != null && currentReactionsData is Map) {
-      rawReactions = Map<String, dynamic>.from(currentReactionsData);
-    }
+      if (response == null) return;
 
-    var hadThisReaction = false;
-    for (final entry in rawReactions.entries) {
-      if (entry.key == reaction &&
-          entry.value is List &&
-          List<String>.from(entry.value).contains(currentUserId)) {
-        hadThisReaction = true;
-        break;
+      final currentReactionsData = response['reactions'];
+      Map<String, dynamic> rawReactions = {};
+      if (currentReactionsData != null && currentReactionsData is Map) {
+        rawReactions = Map<String, dynamic>.from(currentReactionsData);
       }
-    }
 
-    // Remove user from every reaction (one reaction per user).
-    for (final key in rawReactions.keys.toList()) {
-      final list = rawReactions[key];
-      if (list is List) {
-        final users = List<String>.from(list);
-        users.remove(currentUserId);
-        if (users.isEmpty) {
-          rawReactions.remove(key);
-        } else {
-          rawReactions[key] = users;
+      var hadThisReaction = false;
+      for (final entry in rawReactions.entries) {
+        if (entry.key == reaction &&
+            entry.value is List &&
+            List<String>.from(entry.value).contains(currentUserId)) {
+          hadThisReaction = true;
+          break;
         }
       }
-    }
 
-    if (!hadThisReaction) {
-      final users = <String>[currentUserId];
-      rawReactions[reaction] = users;
-    }
+      // Remove user from every reaction (one reaction per user).
+      for (final key in rawReactions.keys.toList()) {
+        final list = rawReactions[key];
+        if (list is List) {
+          final users = List<String>.from(list);
+          users.remove(currentUserId);
+          if (users.isEmpty) {
+            rawReactions.remove(key);
+          } else {
+            rawReactions[key] = users;
+          }
+        }
+      }
 
-    await _supabase
-        .from('messages')
-        .update({'reactions': rawReactions})
-        .eq('id', messageId);
+      if (!hadThisReaction) {
+        final users = <String>[currentUserId];
+        rawReactions[reaction] = users;
+      }
+
+      await _supabase
+          .from('messages')
+          .update({'reactions': rawReactions})
+          .eq('id', messageId);
+    } catch (e) {
+      rethrow;
+    }
   }
 }
