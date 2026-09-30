@@ -169,7 +169,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
             height: 7,
             margin: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.8),
+              color: AppColors.black.withValues(alpha: 0.8),
               shape: BoxShape.circle,
             ),
           ),
@@ -205,10 +205,10 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            Colors.white.withValues(
+                            AppColors.coral.withValues(
                               alpha: _glowOpacity.value * 0.35,
                             ),
-                            Colors.white.withValues(alpha: 0.0),
+                            AppColors.coral.withValues(alpha: 0.0),
                           ],
                         ),
                       ),
@@ -241,7 +241,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                               fontSize: 40,
                               fontWeight: FontWeight.w800,
                               letterSpacing: -1.5,
-                              color: Colors.white,
+                              color: AppColors.black,
                             ),
                           ),
                         ),
@@ -256,7 +256,7 @@ class _AnimatedSplashScreenState extends State<AnimatedSplashScreen>
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: 0.7),
+                              color: AppColors.black.withValues(alpha: 0.7),
                               letterSpacing: -0.2,
                             ),
                           ),

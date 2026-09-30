@@ -1355,15 +1355,28 @@ class _FeedCommentBottomSheetState extends State<FeedCommentBottomSheet> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          comment.authorUsername != null
-                                              ? '@${comment.authorUsername}'
-                                              : 'user',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.coral,
-                                            fontSize: 12.5,
-                                          ),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              comment.authorDisplayName ?? (comment.authorUsername != null
+                                                  ? '@${comment.authorUsername}'
+                                                  : 'user'),
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.coral,
+                                                fontSize: 12.5,
+                                              ),
+                                            ),
+                                            if (comment.isVerified) ...[
+                                              const SizedBox(width: 4),
+                                              const Icon(
+                                                Icons.verified,
+                                                color: Colors.blue,
+                                                size: 14,
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                         SizedBox(height: 3),
                                         Text(

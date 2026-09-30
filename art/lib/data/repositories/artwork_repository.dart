@@ -206,7 +206,7 @@ class ArtworkRepository {
     try {
       final response = await _client
           .from('comments')
-          .select('*, profiles:user_id(username, display_name, avatar_url)')
+          .select('*, profiles:user_id(username, display_name, avatar_url, is_verified)')
           .eq('artwork_id', artworkId)
           .order('created_at', ascending: true);
 
@@ -231,7 +231,7 @@ class ArtworkRepository {
           'content': content,
           'created_at': DateTime.now().toIso8601String(),
         })
-        .select('*, profiles:user_id(username, display_name, avatar_url)')
+        .select('*, profiles:user_id(username, display_name, avatar_url, is_verified)')
         .single();
 
     await _notificationRepository.createCommentNotification(

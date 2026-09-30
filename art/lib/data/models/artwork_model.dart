@@ -10,6 +10,7 @@ class ArtworkModel {
   final int favoritesCount;
   final DateTime createdAt;
   final String? authorUsername;
+  final String? authorDisplayName;
   final String? authorAvatarUrl;
   final String? aiTool;
   final String? aiPrompt;
@@ -26,6 +27,7 @@ class ArtworkModel {
     this.favoritesCount = 0,
     required this.createdAt,
     this.authorUsername,
+    this.authorDisplayName,
     this.authorAvatarUrl,
     this.aiTool,
     this.aiPrompt,
@@ -96,6 +98,7 @@ class ArtworkModel {
       favoritesCount: parsedFavorites,
       createdAt: DateTime.parse(json['created_at'] as String),
       authorUsername: profile?['username'] as String? ?? json['author_username'] as String?,
+      authorDisplayName: profile?['display_name'] as String? ?? json['author_display_name'] as String?,
       authorAvatarUrl: profile?['avatar_url'] as String? ?? json['author_avatar_url'] as String?,
       aiTool: json['ai_tool'] as String?,
       aiPrompt: json['ai_prompt'] as String?,
@@ -115,6 +118,7 @@ class ArtworkModel {
       'favorites_count': favoritesCount,
       'created_at': createdAt.toIso8601String(),
       'author_username': authorUsername,
+      'author_display_name': authorDisplayName,
       'author_avatar_url': authorAvatarUrl,
       'ai_tool': aiTool,
       'ai_prompt': aiPrompt,
@@ -133,6 +137,7 @@ class ArtworkModel {
     int? favoritesCount,
     DateTime? createdAt,
     String? authorUsername,
+    String? authorDisplayName,
     String? authorAvatarUrl,
     String? aiTool,
     String? aiPrompt,
@@ -149,6 +154,7 @@ class ArtworkModel {
       favoritesCount: favoritesCount ?? this.favoritesCount,
       createdAt: createdAt ?? this.createdAt,
       authorUsername: authorUsername ?? this.authorUsername,
+      authorDisplayName: authorDisplayName ?? this.authorDisplayName,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       aiTool: aiTool ?? this.aiTool,
       aiPrompt: aiPrompt ?? this.aiPrompt,

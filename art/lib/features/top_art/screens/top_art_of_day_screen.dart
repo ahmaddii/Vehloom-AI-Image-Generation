@@ -425,7 +425,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
         Expanded(
           flex: 1,
           child: Hero(
-            tag: 'top_art_${topOne.id}',
+            tag: 'artwork-${topOne.id}',
             child: _buildImageWidget(topOne, false),
           ),
         ),
@@ -440,7 +440,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
       children: [
         _buildDetailsWidget(topOne, true),
         Hero(
-          tag: 'top_art_${topOne.id}',
+          tag: 'artwork-${topOne.id}',
           child: SizedBox(height: 260, child: _buildImageWidget(topOne, true)),
         ),
       ],
@@ -525,9 +525,9 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      topOne.authorUsername != null
+                      topOne.authorDisplayName ?? (topOne.authorUsername != null
                           ? '@${topOne.authorUsername}'
-                          : 'user',
+                          : 'user'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -692,7 +692,7 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                 const SizedBox(width: 8),
                 // Thumbnail
                 Hero(
-                  tag: 'top_art_${artwork.id}',
+                  tag: 'artwork-${artwork.id}',
                   child: Container(
                     width: 56,
                     height: 56,
@@ -723,9 +723,9 @@ class _TopArtOfDayScreenState extends State<TopArtOfDayScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        artwork.authorUsername != null
+                        artwork.authorDisplayName ?? (artwork.authorUsername != null
                             ? '@${artwork.authorUsername}'
-                            : 'user',
+                            : 'user'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

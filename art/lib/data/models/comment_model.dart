@@ -5,7 +5,9 @@ class CommentModel {
   final String content;
   final DateTime createdAt;
   final String? authorUsername;
+  final String? authorDisplayName;
   final String? authorAvatarUrl;
+  final bool isVerified;
 
   CommentModel({
     required this.id,
@@ -14,7 +16,9 @@ class CommentModel {
     required this.content,
     required this.createdAt,
     this.authorUsername,
+    this.authorDisplayName,
     this.authorAvatarUrl,
+    this.isVerified = false,
   });
 
   factory CommentModel.fromJson(Map<String, dynamic> json) {
@@ -26,7 +30,9 @@ class CommentModel {
       content: json['content'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       authorUsername: profile?['username'] as String? ?? json['author_username'] as String?,
+      authorDisplayName: profile?['display_name'] as String? ?? json['author_display_name'] as String?,
       authorAvatarUrl: profile?['avatar_url'] as String? ?? json['author_avatar_url'] as String?,
+      isVerified: profile?['is_verified'] as bool? ?? json['is_verified'] as bool? ?? false,
     );
   }
 
@@ -38,7 +44,9 @@ class CommentModel {
       'content': content,
       'created_at': createdAt.toIso8601String(),
       'author_username': authorUsername,
+      'author_display_name': authorDisplayName,
       'author_avatar_url': authorAvatarUrl,
+      'is_verified': isVerified,
     };
   }
 
@@ -49,7 +57,9 @@ class CommentModel {
     String? content,
     DateTime? createdAt,
     String? authorUsername,
+    String? authorDisplayName,
     String? authorAvatarUrl,
+    bool? isVerified,
   }) {
     return CommentModel(
       id: id ?? this.id,
@@ -58,7 +68,9 @@ class CommentModel {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       authorUsername: authorUsername ?? this.authorUsername,
+      authorDisplayName: authorDisplayName ?? this.authorDisplayName,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      isVerified: isVerified ?? this.isVerified,
     );
   }
 }

@@ -297,6 +297,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
       ProfileModel? myProfile;
       List<StoryModel> activeStories = [];
       List<ProfileModel> followed = [];
+      List<ProfileModel> followers = [];
 
       // Parallel execution for massive speed boost
       await Future.wait([
@@ -313,6 +314,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
           SocialRepository()
               .fetchFollowing(currentUserId)
               .then((v) => followed = v),
+        if (currentUserId != null && !isLoadMore)
+          SocialRepository()
+              .fetchFollowers(currentUserId)
+              .then((v) => followers = v),
       ]);
 
       List<ProfileModel> creators = [];
@@ -337,7 +342,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
         }
 
         creators.add(myProfile!);
-        creators.addAll(followed);
+        
+        final allRelatedUsers = [...followed, ...followers];
+        final uniqueCreators = <String, ProfileModel>{};
+        for (var user in allRelatedUsers) {
+          uniqueCreators[user.id] = user;
+        }
+        creators.addAll(uniqueCreators.values);
       }
 
       if (mounted) {
@@ -780,35 +791,39 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                         ],
                                       ),
                                       SizedBox(height: 6),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              isMe
-                                                  ? 'You'
-                                                  : (creator.displayName ??
-                                                        creator.username),
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: isMe
-                                                    ? FontWeight.bold
-                                                    : FontWeight.w600,
-                                                color: AppColors.black,
+                                      SizedBox(
+                                        width: 74,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                isMe
+                                                    ? 'You'
+                                                    : (creator.displayName ??
+                                                          creator.username),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: isMe
+                                                      ? FontWeight.bold
+                                                      : FontWeight.w600,
+                                                  color: AppColors.black,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                textAlign: TextAlign.center,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          ),
-                                          if (!isMe && creator.isVerified) ...[
-                                            const SizedBox(width: 4),
-                                            Icon(
-                                              Icons.verified,
-                                              color: Colors.blueAccent,
-                                              size: 14,
-                                            ),
+                                            if (!isMe && creator.isVerified) ...[
+                                              const SizedBox(width: 2),
+                                              Icon(
+                                                Icons.verified,
+                                                color: Colors.blueAccent,
+                                                size: 14,
+                                              ),
+                                            ],
                                           ],
-                                        ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -1089,8 +1104,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                   ),
 
                                                   // Author avatar / handle on bottom-left if present
-                                                  if (artwork.authorUsername !=
-                                                      null)
+                                                  if (artwork.authorDisplayName != null || artwork.authorUsername != null)
                                                     Positioned(
                                                       bottom: 12,
                                                       left: 12,
@@ -1130,8 +1144,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with RouteAware {
                                                                     AuthRepository()
                                                                         .currentUser
                                                                         ?.id
-                                                                ? '@${artwork.authorUsername} (You)'
-                                                                : '@${artwork.authorUsername}',
+                                                                ? '${artwork.authorDisplayName ?? '@${artwork.authorUsername}'} (You)'
+                                                                : artwork.authorDisplayName ?? '@${artwork.authorUsername}',
                                                             style: TextStyle(
                                                               color:
                                                                   Colors.white,
